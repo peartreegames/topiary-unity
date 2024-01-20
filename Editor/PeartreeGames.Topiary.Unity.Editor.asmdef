@@ -1,0 +1,21 @@
+{
+    "name": "PeartreeGames.Topiary.Unity.Editor",
+    "rootNamespace": "PeartreeGames.Topiary.Unity.Editor",
+    "references": [
+        "PeartreeGames.Topiary.Unity",
+        "PeartreeGames.Evt.Variables",
+        "PeartreeGames.Evt.Variables.Editor",
+        "Unity.Addressables.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

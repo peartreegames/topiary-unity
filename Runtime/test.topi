@@ -1,0 +1,19 @@
+var value = "111"
+=== START {
+    :: "A person approaches."
+    :Stranger: "Hey there."
+    value = "123 123 123"
+    fork^ {
+        ~ "Greet them." {
+            :Drew: "Oh, uh, nice to meet you. My name is Drew."
+            :Drew: "Sorry, I thought you were someone I knew."
+            :Drew: "I'd love to stay and chat, but this is just a short demo."
+        }
+        ~ "Say nothing." {
+            :: "The person acts as though they were addressing someone else."
+        }
+    }
+    :: "They walk away..."
+}
+
+=> START

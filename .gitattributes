@@ -1,0 +1,4 @@
+*.dll binary
+*.lib binary
+*.dylib binary
+*.pdb binary
