@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using PeartreeGames.Evt.Variables;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
@@ -54,7 +53,7 @@ namespace PeartreeGames.Topiary.Unity
             Library.IsUnityRuntime = true;
         }
 
-        private void Log(string msg, Library.Severity severity)
+        public void Log(string msg, Library.Severity severity)
         {
             switch (severity)
             {
