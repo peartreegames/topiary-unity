@@ -18,8 +18,11 @@ namespace PeartreeGames.Topiary.Unity.Editor
             var asset = new TextAsset(text);
             var fileName = Path.GetFileName(ctx.assetPath);
             var icon = Resources.Load<Texture2D>("topi");
+            ctx.AddObjectToAsset("main", asset, icon);
+            ctx.SetMainObject(asset);
             var byteIcon = Resources.Load<Texture2D>("byte");
-            Library.OnDebugLogMessage += Log;
+            var log = Logger(ctx);
+            Library.OnDebugLogMessage += log;
             try
             {
                 var absPath = Application.dataPath + ctx.assetPath[6..];
@@ -28,7 +31,7 @@ namespace PeartreeGames.Topiary.Unity.Editor
                 var compiledAsset = ScriptableObject.CreateInstance<ByteData>();
                 compiledAsset.name = identifier;
                 compiledAsset.bytes = compiled;
-                
+
                 using var memStream = new MemoryStream(compiled);
                 using var reader = new BinaryReader(memStream);
                 compiledAsset.ExternsSet = ByteCode.GetExterns(reader);
@@ -44,38 +47,44 @@ namespace PeartreeGames.Topiary.Unity.Editor
                 var entry = settings.FindAssetEntry(guid.ToString());
                 if (entry != null && entry.parentGroup == group) return;
                 var addressable = settings.CreateOrMoveEntry(guid.ToString(), group);
-                addressable.address = fileName; 
+                addressable.address = fileName;
                 addressable.SetLabel("Topiary", true);
                 addressable.SetLabel("Topi", true);
-                ctx.AddObjectToAsset("main", asset, icon);
                 EditorUtility.SetDirty(settings);
             }
-            catch (Exception e)
+            catch (EndOfStreamException)
             {
                 var errorIcon = Resources.Load<Texture2D>("error");
                 ctx.AddObjectToAsset("main", asset, errorIcon);
+                ctx.SetMainObject(asset);
+            }
+            catch (Exception e)
+            {
                 Debug.LogError(e);
             }
-            ctx.SetMainObject(asset);
-            Library.OnDebugLogMessage -= Log;
+
+            Library.OnDebugLogMessage -= log;
         }
-        public void Log(string msg, Library.Severity severity)
-        {
-            switch (severity)
+
+        private static Action<string, Library.Severity> Logger(AssetImportContext ctx) =>
+            (msg, severity) =>
             {
-                case Library.Severity.Debug:
-                case Library.Severity.Info:
-                    Debug.Log(msg);
-                    break;
-                case Library.Severity.Warn:
-                    Debug.LogWarning(msg);
-                    break;
-                case Library.Severity.Error:
-                    Debug.LogError(msg);
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(severity), severity, null);
-            }
-        }
+                switch (severity)
+                {
+                    case Library.Severity.Debug:
+                        break;
+                    case Library.Severity.Info:
+                        Debug.Log(msg);
+                        break;
+                    case Library.Severity.Warn:
+                        ctx.LogImportWarning(msg);
+                        break;
+                    case Library.Severity.Error:
+                        ctx.LogImportError(msg);
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(severity), severity, null);
+                }
+            };
     }
 }

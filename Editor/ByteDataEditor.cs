@@ -1,6 +1,7 @@
 ﻿using System;
 using UnityEditor;
 using UnityEditor.UIElements;
+using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace PeartreeGames.Topiary.Unity.Editor
@@ -26,7 +27,9 @@ namespace PeartreeGames.Topiary.Unity.Editor
             elem.Add(externsField); 
             var d = _byteData.bytes;
             elem.Add(new Label($"Compiled {d.Length}\n"));
-            var dataLabel = new Label(BitConverter.ToString(d)[..4000] + "...")
+            var text = BitConverter.ToString(d)[..Mathf.Min(d.Length + 1, 4001)];
+            if (d.Length > 4001) text += "...";
+            var dataLabel = new Label(text)
                 {
                     style =
                     {

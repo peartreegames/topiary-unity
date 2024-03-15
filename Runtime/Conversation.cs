@@ -2,8 +2,11 @@
 using System.Collections;
 using System.Collections.Generic;
 using PeartreeGames.Evt.Variables;
+using Sirenix.Serialization;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.ResourceManagement.ResourceLocations;
 
 namespace PeartreeGames.Topiary.Unity
 {
@@ -14,12 +17,14 @@ namespace PeartreeGames.Topiary.Unity
         public static event Action<Story, Dialogue, TopiSpeaker> OnDialogue;
         public static event Action<Story, Choice[]> OnChoices;
 
-        public string[] tags;
+        [SerializeField] private string bough;
+        [SerializeField] private string[] tags;
         [SerializeField] private AssetReferenceT<ByteData> file;
         private ByteData _data;
 
         [SerializeField] private Library.Severity logs = Library.Severity.Error;
         public Story Story { get; private set; }
+        public string[] Tags => tags;
 
         private TopiSpeaker _previousSpeaker;
         private List<EvtTopiReference> _evtReferences;
@@ -37,6 +42,14 @@ namespace PeartreeGames.Topiary.Unity
                 Debug.LogError($"[Topiary.Unity] {name} has no file set: {file}");
                 yield break;
             }
+            var loc = Addressables.LoadResourceLocationsAsync(file);
+            yield return loc;
+            if (loc.Status != AsyncOperationStatus.Succeeded || loc.Result == null || loc.Result.Count == 0)
+            {
+                Debug.LogError($"[Topiary.Unity] {name} has no file set: {file}");
+                yield break;
+            }
+            
 
             var ao = Addressables.LoadAssetAsync<ByteData>(file);
             yield return ao;
@@ -102,7 +115,7 @@ namespace PeartreeGames.Topiary.Unity
             Library.OnDebugLogMessage += Log;
             yield return StartCoroutine(LoadAddressableTopiValues());
             OnStart?.Invoke(Story, this);
-            Story.Start();
+            Story.Start(bough);
             while (Story?.CanContinue ?? false)
             {
                 try
