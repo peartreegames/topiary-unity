@@ -2,11 +2,9 @@
 using System.Collections;
 using System.Collections.Generic;
 using PeartreeGames.Evt.Variables;
-using Sirenix.Serialization;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
-using UnityEngine.ResourceManagement.ResourceLocations;
 
 namespace PeartreeGames.Topiary.Unity
 {
@@ -39,14 +37,14 @@ namespace PeartreeGames.Topiary.Unity
         {
             if (file == null)
             {
-                Debug.LogError($"[Topiary.Unity] {name} has no file set: {file}");
+                Log($"[Topiary.Unity] No file set: {file}", Library.Severity.Error);
                 yield break;
             }
             var loc = Addressables.LoadResourceLocationsAsync(file);
             yield return loc;
             if (loc.Status != AsyncOperationStatus.Succeeded || loc.Result == null || loc.Result.Count == 0)
             {
-                Debug.LogError($"[Topiary.Unity] {name} has no file set: {file}");
+                Log($"[Topiary.Unity] No file set: {file}", Library.Severity.Error);
                 yield break;
             }
             
@@ -56,11 +54,12 @@ namespace PeartreeGames.Topiary.Unity
             _data = ao.Result;
             Library.OnDebugLogMessage += Log;
             Story = new Story(_data.bytes, OnDialogueCallback, OnChoicesCallback, logs);
-            Story.BindFunctions(AppDomain.CurrentDomain.GetAssemblies());
+            if (!Story.IsValid) Log("[Topiary.Unity] Could not create Story ", Library.Severity.Error);
+            else Story.BindFunctions(AppDomain.CurrentDomain.GetAssemblies());
             Library.OnDebugLogMessage -= Log;
         }
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        [RuntimeInitializeOnLoadMethod]
         private static void Init()
         {
             Library.IsUnityRuntime = true;
@@ -72,13 +71,13 @@ namespace PeartreeGames.Topiary.Unity
             {
                 case Library.Severity.Debug:
                 case Library.Severity.Info:
-                    Debug.Log($"{gameObject.name}: {msg}");
+                    Debug.Log($"{name}: {msg}", gameObject);
                     break;
                 case Library.Severity.Warn:
-                    Debug.LogWarning($"{gameObject.name}: {msg}");
+                    Debug.LogWarning($"{name}: {msg}", gameObject);
                     break;
                 case Library.Severity.Error:
-                    Debug.LogError($"{gameObject.name}: {msg}");
+                    Debug.LogError($"{name}: {msg}", gameObject);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(severity), severity, null);
@@ -111,6 +110,11 @@ namespace PeartreeGames.Topiary.Unity
 
         public IEnumerator Play()
         {
+            if (!Story.IsValid)
+            {
+                Log("[Topiary.Unity] Invalid Story", Library.Severity.Warn);
+                yield break;
+            }
             Story.Library.SetDebugSeverity(logs);
             Library.OnDebugLogMessage += Log;
             yield return StartCoroutine(LoadAddressableTopiValues());
@@ -124,18 +128,20 @@ namespace PeartreeGames.Topiary.Unity
                 }
                 catch (System.Runtime.InteropServices.SEHException ex)
                 {
-                    Debug.LogError($"Caught an SEHException: {ex}");
+                    Log($"Caught an SEHException: {ex}", Library.Severity.Error);
                     break;
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError(e);
+                    Log(e.Message, Library.Severity.Error);
                     break;
                 }
 
                 while (Story?.IsWaiting ?? false) yield return null;
             }
 
+            if (_previousSpeaker != null) _previousSpeaker.StopSpeaking();
+            _previousSpeaker = null;
             OnEnd?.Invoke(Story, this);
             UnloadAddressableTopiValues();
             Library.OnDebugLogMessage -= Log;

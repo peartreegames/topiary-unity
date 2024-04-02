@@ -18,9 +18,13 @@ namespace PeartreeGames.Topiary.Unity.Editor
             var asset = new TextAsset(text);
             var fileName = Path.GetFileName(ctx.assetPath);
             var icon = Resources.Load<Texture2D>("topi");
-            ctx.AddObjectToAsset("main", asset, icon);
-            ctx.SetMainObject(asset);
             var byteIcon = Resources.Load<Texture2D>("byte");
+            if (string.IsNullOrEmpty(text))
+            {
+                ctx.AddObjectToAsset("main", asset, icon);
+                ctx.SetMainObject(asset);
+                return;
+            }
             var log = Logger(ctx);
             Library.OnDebugLogMessage += log;
             try
@@ -54,13 +58,16 @@ namespace PeartreeGames.Topiary.Unity.Editor
             }
             catch (EndOfStreamException)
             {
-                var errorIcon = Resources.Load<Texture2D>("error");
-                ctx.AddObjectToAsset("main", asset, errorIcon);
-                ctx.SetMainObject(asset);
+                icon = Resources.Load<Texture2D>("error");
             }
             catch (Exception e)
             {
                 Debug.LogError(e);
+            }
+            finally
+            {
+                ctx.AddObjectToAsset("main", asset, icon);
+                ctx.SetMainObject(asset);
             }
 
             Library.OnDebugLogMessage -= log;
