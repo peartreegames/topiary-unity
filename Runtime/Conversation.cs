@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using Newtonsoft.Json.Linq;
 using PeartreeGames.Evt.Variables;
+using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
@@ -10,10 +12,10 @@ namespace PeartreeGames.Topiary.Unity
 {
     public class Conversation : MonoBehaviour
     {
-        public static event Action<Story, Conversation> OnStart;
-        public static event Action<Story, Conversation> OnEnd;
-        public static event Action<Story, Dialogue, TopiSpeaker> OnDialogue;
-        public static event Action<Story, Choice[]> OnChoices;
+        public static event Action<Dialogue, Conversation> OnStart;
+        public static event Action<Dialogue, Conversation> OnEnd;
+        public static event Action<Dialogue, Line, TopiSpeaker> OnLine;
+        public static event Action<Dialogue, Choice[]> OnChoices;
 
         [SerializeField] private string bough;
         [SerializeField] private string[] tags;
@@ -21,7 +23,7 @@ namespace PeartreeGames.Topiary.Unity
         private ByteData _data;
 
         [SerializeField] private Library.Severity logs = Library.Severity.Error;
-        public Story Story { get; private set; }
+        public Dialogue Dialogue { get; private set; }
         public string[] Tags => tags;
 
         private TopiSpeaker _previousSpeaker;
@@ -31,8 +33,8 @@ namespace PeartreeGames.Topiary.Unity
         public static void AddSpeaker(TopiSpeaker speaker) => Speakers[speaker.name] = speaker;
         public static void RemoveSpeaker(TopiSpeaker speaker) => Speakers.Remove(speaker.name);
 
-        private static byte[] _tempState;
-
+        [ShowInInspector]
+        public static readonly State State = new();
         private IEnumerator Start()
         {
             if (file == null)
@@ -53,9 +55,9 @@ namespace PeartreeGames.Topiary.Unity
             yield return ao;
             _data = ao.Result;
             Library.OnDebugLogMessage += Log;
-            Story = new Story(_data.bytes, OnDialogueCallback, OnChoicesCallback, logs);
-            if (!Story.IsValid) Log("[Topiary.Unity] Could not create Story ", Library.Severity.Error);
-            else Story.BindFunctions(AppDomain.CurrentDomain.GetAssemblies());
+            Dialogue = new Dialogue(_data.bytes, OnLineCallback, OnChoicesCallback, logs);
+            if (!Dialogue.IsValid) Log("[Topiary.Unity] Could not create Dialogue ", Library.Severity.Error);
+            else Dialogue.BindFunctions(AppDomain.CurrentDomain.GetAssemblies());
             Library.OnDebugLogMessage -= Log;
         }
 
@@ -88,43 +90,44 @@ namespace PeartreeGames.Topiary.Unity
         {
             Library.OnDebugLogMessage -= Log;
             UnloadAddressableTopiValues();
-            Story?.Dispose();
+            Dialogue?.Dispose();
             if (file.IsValid()) file.ReleaseAsset();
         }
 
-        private void OnDialogueCallback(Story story, Dialogue dialogue)
+        private void OnLineCallback(Dialogue dialogue, Line line)
         {
             if (_previousSpeaker != null) _previousSpeaker.StopSpeaking();
-            if (Speakers.TryGetValue(dialogue.Speaker, out var speaker)) speaker.StartSpeaking();
+            if (Speakers.TryGetValue(line.Speaker, out var speaker)) speaker.StartSpeaking();
             _previousSpeaker = speaker;
-            OnDialogue?.Invoke(story, dialogue, speaker);
+            OnLine?.Invoke(dialogue, line, speaker);
         }
 
-        private void OnChoicesCallback(Story story, Choice[] choices) =>
-            OnChoices?.Invoke(story, choices);
+        private void OnChoicesCallback(Dialogue dialogue, Choice[] choices) =>
+            OnChoices?.Invoke(dialogue, choices);
 
-        public void PlayStory()
+        public void PlayDialogue()
         {
             StartCoroutine(Play());
         }
 
         public IEnumerator Play()
         {
-            if (!Story.IsValid)
+            if (!Dialogue.IsValid)
             {
-                Log("[Topiary.Unity] Invalid Story", Library.Severity.Warn);
+                Log("[Topiary.Unity] Invalid Dialogue", Library.Severity.Warn);
                 yield break;
             }
-            Story.Library.SetDebugSeverity(logs);
+            Dialogue.Library.SetDebugSeverity(logs);
             Library.OnDebugLogMessage += Log;
             yield return StartCoroutine(LoadAddressableTopiValues());
-            OnStart?.Invoke(Story, this);
-            Story.Start(bough);
-            while (Story?.CanContinue ?? false)
+            State.Inject(Dialogue);
+            OnStart?.Invoke(Dialogue, this);
+            Dialogue.Start(bough);
+            while (Dialogue?.CanContinue ?? false)
             {
                 try
                 {
-                    Story?.Run();
+                    Dialogue?.Run();
                 }
                 catch (System.Runtime.InteropServices.SEHException ex)
                 {
@@ -137,12 +140,13 @@ namespace PeartreeGames.Topiary.Unity
                     break;
                 }
 
-                while (Story?.IsWaiting ?? false) yield return null;
+                while (Dialogue?.IsWaiting ?? false) yield return null;
             }
 
+            State.Amend(Dialogue);
             if (_previousSpeaker != null) _previousSpeaker.StopSpeaking();
             _previousSpeaker = null;
-            OnEnd?.Invoke(Story, this);
+            OnEnd?.Invoke(Dialogue, this);
             UnloadAddressableTopiValues();
             Library.OnDebugLogMessage -= Log;
         }

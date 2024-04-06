@@ -29,7 +29,7 @@ public class DialogueRunner : MonoBehaviour
     {
         Conversation.OnStart += OnStart;
         Conversation.OnEnd += OnEnd;
-        Conversation.OnDialogue += OnDialogue;
+        Conversation.OnLine += OnLine;
         Conversation.OnChoices += OnChoices;
     }
 
@@ -37,31 +37,30 @@ public class DialogueRunner : MonoBehaviour
     {
         Conversation.OnStart -= OnStart;
         Conversation.OnEnd -= OnEnd;
-        Conversation.OnDialogue -= OnDialogue;
+        Conversation.OnLine -= OnLine;
         Conversation.OnChoices -= OnChoices;
     }
 
-    private void OnStart(Story story, Conversation conversation)
+    private void OnStart(Dialogue dialogue, Conversation conversation)
     {
         // Update the UI
-        // Perform any tasks for dialogue mode
+        // Perform any tasks for line mode
     }
 
-    private void OnDialogue(Story story, PeartreeGames.Topiary.Dialogue dialogue,
-        TopiSpeaker topiSpeaker)
+    private void OnLine(Dialogue dialogue, Line line, TopiSpeaker topiSpeaker)
     {
-        // Update the UI to display the dialogue
-        // Use story.SelectContinue() to continue the story
+        // Update the UI to display the line
+        // Use dialogue.SelectContinue() to continue the dialogue
     }
 
-    private void OnChoices(Story story, Choice[] choices)
+    private void OnChoices(Dialogue dialogue, Choice[] choices)
     {
         // Update the UI to display the choices
-        // Use story.SelectChoice(int) when the player makes their selection
+        // Use dialogue.SelectChoice(int) when the player makes their selection
     }
 
 
-    private void OnEnd(Story story, Conversation conversation)
+    private void OnEnd(Dialogue dialogue, Conversation conversation)
     {
         // Close your UI
         // Perform any clean up tasks
@@ -78,7 +77,7 @@ Once your file is compiled it will automatically be added to a Topiary addressab
 
 Add a `Conversation` MonoBehaviour to a GameObject and select the `.topi` file you want to associate with that Conversation.
 
-Trigger the start of the Conversation in anyway you like with `conversation.PlayStory()` or `StartCoroutine(conversation.Play())`
+Trigger the start of the Conversation in anyway you like with `conversation.PlayDialogue()` or `StartCoroutine(conversation.Play())`
 
 ## Functions
 
@@ -90,7 +89,7 @@ public static class DialogueFunctions
 {
     // playAnim will be replaced with the C# method
     // we give the playAnim function a body in our .topi file for testing
-    // a warning will be shown if any extern isn't set when we start our Story
+    // a warning will be shown if any extern isn't set when we start our Dialogue
     // ex .topi file:
     //      extern const playAnim = |name, clip| {}
     //      playAnim("Player", "Laugh")

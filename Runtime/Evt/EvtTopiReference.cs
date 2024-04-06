@@ -21,13 +21,13 @@ namespace PeartreeGames.Topiary.Unity
         {
             _evtVariable = evtVariable;
             _evtVariable.OnEvt += OnValueChanged;
-            _conversation.Story.Subscribe(_evtVariable.Name, OnTopiValueChanged);
+            _conversation.Dialogue.Subscribe(_evtVariable.Name, OnTopiValueChanged);
         }
 
         public override void Dispose()
         {
             _evtVariable.OnEvt -= OnValueChanged;
-            _conversation.Story.Unsubscribe(_evtVariable.Name, OnTopiValueChanged);
+            _conversation.Dialogue.Unsubscribe(_evtVariable.Name, OnTopiValueChanged);
         }
 
         protected abstract void OnValueChanged(T value);
@@ -40,15 +40,15 @@ namespace PeartreeGames.Topiary.Unity
         public EvtIntReference(Conversation conversation, EvtTopiVariable<int> evtVariable) : base(
             conversation, evtVariable)
         {
-            conversation.Story.Set(evtVariable.Name, evtVariable.Value);
+            conversation.Dialogue.Set(evtVariable.Name, evtVariable.Value);
         }
 
         protected override void OnValueChanged(int value)
         {
             var name = _evtVariable.Name;
-            var current = _conversation.Story.GetValue(name);
+            var current = _conversation.Dialogue.GetValue(name);
             if (current.tag != TopiValue.Tag.Number) return;
-            _conversation.Story.Set(name, value);
+            _conversation.Dialogue.Set(name, value);
         }
 
         protected override void OnTopiValueChanged(ref TopiValue topiValue)
@@ -64,15 +64,15 @@ namespace PeartreeGames.Topiary.Unity
             base(
                 conversation, evtVariable)
         {
-            conversation.Story.Set(evtVariable.Name, evtVariable.Value);
+            conversation.Dialogue.Set(evtVariable.Name, evtVariable.Value);
         }
 
         protected override void OnValueChanged(float value)
         {
             var name = _evtVariable.Name;
-            var current = _conversation.Story.GetValue(name);
+            var current = _conversation.Dialogue.GetValue(name);
             if (current.tag != TopiValue.Tag.Number) return;
-            _conversation.Story.Set(name, value);
+            _conversation.Dialogue.Set(name, value);
         }
 
         protected override void OnTopiValueChanged(ref TopiValue topiValue)
@@ -89,15 +89,15 @@ namespace PeartreeGames.Topiary.Unity
             base(
                 conversation, evtVariable)
         {
-            conversation.Story.Set(evtVariable.Name, evtVariable.Value);
+            conversation.Dialogue.Set(evtVariable.Name, evtVariable.Value);
         }
 
         protected override void OnValueChanged(bool value)
         {
             var name = _evtVariable.Name;
-            var current = _conversation.Story.GetValue(name);
+            var current = _conversation.Dialogue.GetValue(name);
             if (current.tag != TopiValue.Tag.Number) return;
-            _conversation.Story.Set(name, value);
+            _conversation.Dialogue.Set(name, value);
         }
 
         protected override void OnTopiValueChanged(ref TopiValue topiValue)
@@ -113,15 +113,15 @@ namespace PeartreeGames.Topiary.Unity
             base(
                 conversation, evtVariable)
         {
-            conversation.Story.Set(evtVariable.Name, evtVariable.Value);
+            conversation.Dialogue.Set(evtVariable.Name, evtVariable.Value);
         }
 
         protected override void OnValueChanged(string value)
         {
             var name = _evtVariable.Name;
-            var current = _conversation.Story.GetValue(name);
+            var current = _conversation.Dialogue.GetValue(name);
             if (current.tag != TopiValue.Tag.Number) return;
-            _conversation.Story.Set(name, value);
+            _conversation.Dialogue.Set(name, value);
         }
 
         protected override void OnTopiValueChanged(ref TopiValue topiValue)

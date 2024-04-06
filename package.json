@@ -1,6 +1,6 @@
 {
   "name": "com.peartreegames.topiaryunity",
-  "version": "0.3.0",
+  "version": "0.12.0",
   "displayName": "Topiary.Unity",
   "description": "Topiary Dialogue Runner for Unity",
   "unity": "2022.3",
@@ -10,7 +10,8 @@
   "licensesUrl": "https://github.com/peartreegames/topiary-unity/licensing.html",
   "dependencies": {
     "com.peartreegames.evt.variables": "0.2.1",
-    "com.unity.addressables": "1.21.19"
+    "com.unity.addressables": "1.21.19",
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
   },
   "keywords": [
     "peartree",

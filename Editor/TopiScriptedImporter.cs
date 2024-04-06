@@ -30,7 +30,7 @@ namespace PeartreeGames.Topiary.Unity.Editor
             try
             {
                 var absPath = Application.dataPath + ctx.assetPath[6..];
-                var compiled = Story.Compile(absPath);
+                var compiled = Dialogue.Compile(absPath);
                 var identifier = $"{fileName}b";
                 var compiledAsset = ScriptableObject.CreateInstance<ByteData>();
                 compiledAsset.name = identifier;
