@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using Newtonsoft.Json.Linq;
 using PeartreeGames.Evt.Variables;
-using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
@@ -12,28 +10,26 @@ namespace PeartreeGames.Topiary.Unity
 {
     public class Conversation : MonoBehaviour
     {
-        public static event Action<Dialogue, Conversation> OnStart;
-        public static event Action<Dialogue, Conversation> OnEnd;
-        public static event Action<Dialogue, Line, TopiSpeaker> OnLine;
-        public static event Action<Dialogue, Choice[]> OnChoices;
-
         [SerializeField] private string bough;
         [SerializeField] private string[] tags;
         [SerializeField] private AssetReferenceT<ByteData> file;
+        [SerializeField] private Library.Severity logs = Library.Severity.Error;
+        
         private ByteData _data;
 
-        [SerializeField] private Library.Severity logs = Library.Severity.Error;
         public Dialogue Dialogue { get; private set; }
         public string[] Tags => tags;
 
         private TopiSpeaker _previousSpeaker;
         private List<EvtTopiReference> _evtReferences;
-
+        public static event Action<Dialogue, Conversation> OnStart;
+        public static event Action<Dialogue, Conversation> OnEnd;
+        public static event Action<Dialogue, Line, TopiSpeaker> OnLine;
+        public static event Action<Dialogue, Choice[]> OnChoices;
         public static Dictionary<string, TopiSpeaker> Speakers { get; } = new();
         public static void AddSpeaker(TopiSpeaker speaker) => Speakers[speaker.name] = speaker;
         public static void RemoveSpeaker(TopiSpeaker speaker) => Speakers.Remove(speaker.name);
 
-        [ShowInInspector]
         public static readonly State State = new();
         private IEnumerator Start()
         {
