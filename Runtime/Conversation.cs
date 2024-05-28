@@ -21,11 +21,11 @@ namespace PeartreeGames.Topiary.Unity
         public string[] Tags => tags;
 
         private TopiSpeaker _previousSpeaker;
-        private List<EvtTopiReference> _evtReferences;
         public static event Action<Dialogue, Conversation> OnStart;
         public static event Action<Dialogue, Conversation> OnEnd;
         public static event Action<Dialogue, Line, TopiSpeaker> OnLine;
         public static event Action<Dialogue, Choice[]> OnChoices;
+        private static Dictionary<string, EvtVariable> Variables = new();
         public static Dictionary<string, TopiSpeaker> Speakers { get; } = new();
         public static void AddSpeaker(TopiSpeaker speaker) => Speakers[speaker.name] = speaker;
         public static void RemoveSpeaker(TopiSpeaker speaker) => Speakers.Remove(speaker.name);
@@ -51,10 +51,16 @@ namespace PeartreeGames.Topiary.Unity
             yield return ao;
             _data = ao.Result;
             Library.OnDebugLogMessage += Log;
-            Dialogue = new Dialogue(_data.bytes, OnLineCallback, OnChoicesCallback, logs);
-            if (!Dialogue.IsValid) Log("[Topiary.Unity] Could not create Dialogue ", Library.Severity.Error);
-            else Dialogue.BindFunctions(AppDomain.CurrentDomain.GetAssemblies());
-            Library.OnDebugLogMessage -= Log;
+            try
+            {
+                Dialogue = new Dialogue(_data.bytes, OnLineCallback, OnChoicesCallback, logs);
+                if (!Dialogue.IsValid) Log("[Topiary.Unity] Could not create Dialogue ", Library.Severity.Error);
+                else Dialogue.BindFunctions(AppDomain.CurrentDomain.GetAssemblies());
+            }
+            finally
+            {
+                Library.OnDebugLogMessage -= Log;
+            }
         }
 
         [RuntimeInitializeOnLoadMethod]
@@ -113,6 +119,8 @@ namespace PeartreeGames.Topiary.Unity
                 Log("[Topiary.Unity] Invalid Dialogue", Library.Severity.Warn);
                 yield break;
             }
+
+            Dialogue.Library.SetSubscribeCallback(ValueChanged);
             Dialogue.Library.SetDebugSeverity(logs);
             Library.OnDebugLogMessage += Log;
             yield return StartCoroutine(LoadAddressableTopiValues());
@@ -147,39 +155,65 @@ namespace PeartreeGames.Topiary.Unity
             Library.OnDebugLogMessage -= Log;
         }
 
-
+        [MonoPInvokeCallback(typeof(Delegates.Subscriber))]
+        public static void ValueChanged(string name, ref TopiValue value)
+        {
+            if (Variables.TryGetValue(name, out var variable))
+            {
+                switch (value.Tag)
+                {
+                    case TopiValue.tag.Bool when variable is EvtTopiBool b:
+                        b.Value = value.Bool;
+                        break;
+                    case TopiValue.tag.Int when variable is EvtTopiInt i:
+                        i.Value = value.Int;
+                        break;
+                    case TopiValue.tag.Float when variable is EvtTopiFloat f:
+                        f.Value = value.Float;
+                        break;
+                    case TopiValue.tag.String when variable is EvtTopiString s:
+                        s.Value = value.String;
+                        break;
+                }
+            }
+        }
+        
         private IEnumerator LoadAddressableTopiValues()
         {
             var ao = Addressables.LoadResourceLocationsAsync(new List<string> {"Topiary", "Evt"},
                 Addressables.MergeMode.Intersection);
             yield return ao;
             var list = ao.Result;
-            _evtReferences = new List<EvtTopiReference>();
             foreach (var item in list)
             {
                 var key = item.PrimaryKey;
                 if (!_data.ExternsSet.Contains(key)) continue;
                 var aoEvt = Addressables.LoadAssetAsync<EvtVariable>(key);
                 yield return aoEvt;
-
-                EvtTopiReference evtRef = aoEvt.Result switch
+                
+                string name = aoEvt.Result switch
                 {
-                    EvtTopiBool b => new EvtBoolReference(this, b),
-                    EvtTopiFloat f => new EvtFloatReference(this, f),
-                    EvtTopiInt i => new EvtIntReference(this, i),
-                    EvtTopiString s => new EvtStringReference(this, s),
+                    EvtTopiBool b => b.Name,
+                    EvtTopiFloat f => f.Name,
+                    EvtTopiInt i => i.Name,
+                    EvtTopiString s => s.Name,
                     _ => null
                 };
-                if (evtRef == null) continue;
-                _evtReferences.Add(evtRef);
+                if (evtRef == null)
+                {
+                    Addressables.ReleaseAsset(aoEvt);
+                    continue;
+                }
+                Variables[name] = aoEvt.Result;
             }
         }
 
         private void UnloadAddressableTopiValues()
         {
-            if (_evtReferences == null) return;
-            foreach (var reference in _evtReferences) reference?.Dispose();
-            _evtReferences.Clear();
+            foreach (var kvp in Variables)
+            {
+                Addressables.ReleaseAsset(kvp.Value);
+            }
         }
     }
 }
