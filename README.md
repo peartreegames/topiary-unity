@@ -1,8 +1,8 @@
 # Topiary.Unity
 
-Unity Integration for the narrative scripting tool [topiary](https://github.com/peartreegames/topiary) with the [C# bindings](https://github.com/peartreegames/topiary-csharp).
+Unity Integration for the dialogue scripting tool [topiary](https://github.com/peartreegames/topiary) with the [C# bindings](https://github.com/peartreegames/topiary-csharp).
 
-Checkout the [syntax](https://github.com/peartreegames/topiary/blob/main/docs/syntax.md) file if you're new to writing with Topi.
+Checkout the [syntax](https://peartree.games/topiary/docs/syntax) file if you're new to writing with Topi.
 
 ## Installation
 
@@ -93,25 +93,17 @@ public static class DialogueFunctions
     // ex .topi file:
     //      extern const playAnim = |name, clip| {}
     //      playAnim("Player", "Laugh")
-    [Topi("playAnim"), Preserve]
-    public static void PlayAnim(TopiValue speakerName, TopiValue animClip)
+    [Topi("playAnim", 2)]
+    [MonoPInvokeCallback(typeof(Delegates.ExternFunctionDelegate))]
+    public static TopiValue PlayAnim(IntPtr argsPtr, byte count)
     {
-        if (!Conversation.Speakers.TryGetValue(speakerName.String, out var speaker)) return;
-        speaker.GetComponent<Speaker>().PlayAnim(animClip.String);
-    }
-
-    [Topi("triggerAnim"), Preserve]
-    public static void TriggerAnim(TopiValue speakerName, TopiValue animClip)
-    {
-        if (!Conversation.Speakers.TryGetValue(speakerName.String, out var speaker)) return;
-        speaker.GetComponent<Speaker>().TriggerAnim(animClip.String);
-    }
-    
-    [Topi("stopAnim"), Preserve]
-    public static void StopAnim(TopiValue speakerName, TopiValue animClip)
-    {
-        if (!Conversation.Speakers.TryGetValue(speakerName.String, out var speaker)) return;
-        speaker.GetComponent<Speaker>().StopAnim(animClip.String);
+        var args = TopiValue.CreateArgs(argsPtr, count);
+        var speakerName = args[0];
+        var animClip = args[1];
+        if (!Conversation.Speakers.TryGetValue(speakerName.String, out var topi) ||
+            !topi.TryGetComponent(out Speaker speaker)) return default;
+        speaker.PlayAnim(animClip.String);
+        return default;
     }
 }
 ```
