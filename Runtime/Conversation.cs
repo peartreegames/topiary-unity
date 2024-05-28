@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using AOT;
 using PeartreeGames.Evt.Variables;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
@@ -22,11 +23,13 @@ namespace PeartreeGames.Topiary.Unity
 
         private TopiSpeaker _previousSpeaker;
         private List<EvtTopiReference> _evtReferences;
+        public static event Action<Dialogue, Conversation> OnCreated;
         public static event Action<Dialogue, Conversation> OnStart;
         public static event Action<Dialogue, Conversation> OnEnd;
         public static event Action<Dialogue, Line, TopiSpeaker> OnLine;
         public static event Action<Dialogue, Choice[]> OnChoices;
-        public static Dictionary<string, TopiSpeaker> Speakers { get; } = new();
+        public static readonly Dictionary<string, TopiSpeaker> Speakers  = new();
+        public static readonly Dictionary<IntPtr, Conversation> Conversations = new();
         public static void AddSpeaker(TopiSpeaker speaker) => Speakers[speaker.name] = speaker;
         public static void RemoveSpeaker(TopiSpeaker speaker) => Speakers.Remove(speaker.name);
 
@@ -50,32 +53,33 @@ namespace PeartreeGames.Topiary.Unity
             var ao = Addressables.LoadAssetAsync<ByteData>(file);
             yield return ao;
             _data = ao.Result;
-            Library.OnDebugLogMessage += Log;
-            Dialogue = new Dialogue(_data.bytes, OnLineCallback, OnChoicesCallback, logs);
-            if (!Dialogue.IsValid) Log("[Topiary.Unity] Could not create Dialogue ", Library.Severity.Error);
-            else Dialogue.BindFunctions(AppDomain.CurrentDomain.GetAssemblies());
-            Library.OnDebugLogMessage -= Log;
+            Dialogue = new Dialogue(_data.bytes, OnLineCallback, OnChoicesCallback, LogCallback, logs);
+            if (!Dialogue.IsValid)
+            {
+                Log("[Topiary.Unity] Could not create Dialogue ", Library.Severity.Error);
+                yield break;
+            }
+
+            OnCreated?.Invoke(Dialogue, this);
+            Conversations.Add(Dialogue.VmPtr, this);
         }
 
-        [RuntimeInitializeOnLoadMethod]
-        private static void Init()
-        {
-            Library.IsUnityRuntime = true;
-        }
+        [MonoPInvokeCallback(typeof(Delegates.OutputLogDelegate))]
+        public static void LogCallback(IntPtr intPtr, Library.Severity severity) => Log(Library.PtrToUtf8String(intPtr), severity);
 
-        public void Log(string msg, Library.Severity severity)
+        public static void Log(string msg, Library.Severity severity)
         {
             switch (severity)
             {
                 case Library.Severity.Debug:
                 case Library.Severity.Info:
-                    Debug.Log($"{name}: {msg}", gameObject);
+                    Debug.Log(msg);
                     break;
                 case Library.Severity.Warn:
-                    Debug.LogWarning($"{name}: {msg}", gameObject);
+                    Debug.LogWarning(msg);
                     break;
                 case Library.Severity.Error:
-                    Debug.LogError($"{name}: {msg}", gameObject);
+                    Debug.LogError(msg);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(severity), severity, null);
@@ -84,22 +88,28 @@ namespace PeartreeGames.Topiary.Unity
 
         private void OnDestroy()
         {
-            Library.OnDebugLogMessage -= Log;
             UnloadAddressableTopiValues();
-            Dialogue?.Dispose();
+            if (Dialogue != null)
+            {
+                Conversations?.Remove(Dialogue.VmPtr);
+                Dialogue?.Dispose();
+            }
             if (file.IsValid()) file.ReleaseAsset();
         }
 
-        private void OnLineCallback(Dialogue dialogue, Line line)
+        [MonoPInvokeCallback(typeof(Delegates.OnLineDelegate))]
+        private static void OnLineCallback(IntPtr vmPtr, Line line)
         {
-            if (_previousSpeaker != null) _previousSpeaker.StopSpeaking();
+            var convo = Conversations[vmPtr];
+            if (convo._previousSpeaker != null) convo._previousSpeaker.StopSpeaking();
             if (Speakers.TryGetValue(line.Speaker, out var speaker)) speaker.StartSpeaking();
-            _previousSpeaker = speaker;
-            OnLine?.Invoke(dialogue, line, speaker);
+            convo._previousSpeaker = speaker;
+            OnLine?.Invoke(Dialogue.Dialogues[vmPtr], line, speaker);
         }
 
-        private void OnChoicesCallback(Dialogue dialogue, Choice[] choices) =>
-            OnChoices?.Invoke(dialogue, choices);
+        [MonoPInvokeCallback(typeof(Delegates.OnChoicesDelegate))]
+        private static void OnChoicesCallback(IntPtr vmPtr, IntPtr choicesPtr, byte count) =>
+            OnChoices?.Invoke(Dialogue.Dialogues[vmPtr], Choice.MarshalPtr(choicesPtr, count));
 
         public void PlayDialogue()
         {
@@ -114,7 +124,6 @@ namespace PeartreeGames.Topiary.Unity
                 yield break;
             }
             Dialogue.Library.SetDebugSeverity(logs);
-            Library.OnDebugLogMessage += Log;
             yield return StartCoroutine(LoadAddressableTopiValues());
             State.Inject(Dialogue);
             OnStart?.Invoke(Dialogue, this);
@@ -144,7 +153,6 @@ namespace PeartreeGames.Topiary.Unity
             _previousSpeaker = null;
             OnEnd?.Invoke(Dialogue, this);
             UnloadAddressableTopiValues();
-            Library.OnDebugLogMessage -= Log;
         }
 
 

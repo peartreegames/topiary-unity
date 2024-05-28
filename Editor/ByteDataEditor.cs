@@ -21,7 +21,6 @@ namespace PeartreeGames.Topiary.Unity.Editor
         public override VisualElement CreateInspectorGUI()
         {
             var elem = new VisualElement();
-
             var externsField = new PropertyField(_externsProperty);
             externsField.SetEnabled(false);
             elem.Add(externsField); 

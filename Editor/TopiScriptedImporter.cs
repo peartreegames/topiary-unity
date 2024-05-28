@@ -26,18 +26,24 @@ namespace PeartreeGames.Topiary.Unity.Editor
                 return;
             }
             var log = Logger(ctx);
-            Library.OnDebugLogMessage += log;
             try
             {
                 var absPath = Application.dataPath + ctx.assetPath[6..];
-                var compiled = Dialogue.Compile(absPath);
+                var compiled = Dialogue.Compile(absPath, log);
+                
+                using var memStream = new MemoryStream(compiled);
+                using var reader = new BinaryReader(memStream);
+                var boughs = ByteCode.GetBoughs(reader);
+                if (boughs.Length == 0) return;
+
+
+                // var boughs = ByteCode
                 var identifier = $"{fileName}b";
                 var compiledAsset = ScriptableObject.CreateInstance<ByteData>();
                 compiledAsset.name = identifier;
                 compiledAsset.bytes = compiled;
 
-                using var memStream = new MemoryStream(compiled);
-                using var reader = new BinaryReader(memStream);
+                reader.BaseStream.Position = 0;
                 compiledAsset.ExternsSet = ByteCode.GetExterns(reader);
                 ctx.AddObjectToAsset(identifier, compiledAsset, byteIcon);
 
@@ -70,12 +76,12 @@ namespace PeartreeGames.Topiary.Unity.Editor
                 ctx.SetMainObject(asset);
             }
 
-            Library.OnDebugLogMessage -= log;
         }
 
-        private static Action<string, Library.Severity> Logger(AssetImportContext ctx) =>
-            (msg, severity) =>
+        private static Delegates.OutputLogDelegate Logger(AssetImportContext ctx) =>
+            (intPtr, severity) =>
             {
+                var msg = Library.PtrToUtf8String(intPtr);
                 switch (severity)
                 {
                     case Library.Severity.Debug:

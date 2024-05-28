@@ -1,13 +1,10 @@
 using Newtonsoft.Json.Linq;
-using Sirenix.OdinInspector;
-using UnityEngine;
 
 namespace PeartreeGames.Topiary.Unity
 {
     public class State
     {
         private JObject _rootState;
-        [ShowInInspector, TextArea]
         public string Value
         {
             get => _rootState?.ToString();

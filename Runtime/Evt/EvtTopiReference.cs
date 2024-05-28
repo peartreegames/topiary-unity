@@ -21,13 +21,13 @@ namespace PeartreeGames.Topiary.Unity
         {
             _evtVariable = evtVariable;
             _evtVariable.OnEvt += OnValueChanged;
-            _conversation.Dialogue.Subscribe(_evtVariable.Name, OnTopiValueChanged);
+            _conversation.Dialogue.Subscribe(_evtVariable.Name);
         }
 
         public override void Dispose()
         {
             _evtVariable.OnEvt -= OnValueChanged;
-            _conversation.Dialogue.Unsubscribe(_evtVariable.Name, OnTopiValueChanged);
+            _conversation.Dialogue.Unsubscribe(_evtVariable.Name);
         }
 
         protected abstract void OnValueChanged(T value);
@@ -96,13 +96,13 @@ namespace PeartreeGames.Topiary.Unity
         {
             var name = _evtVariable.Name;
             var current = _conversation.Dialogue.GetValue(name);
-            if (current.tag != TopiValue.Tag.Number) return;
+            if (current.tag != TopiValue.Tag.Bool) return;
             _conversation.Dialogue.Set(name, value);
         }
 
         protected override void OnTopiValueChanged(ref TopiValue topiValue)
         {
-            if (topiValue.tag != TopiValue.Tag.Number) return;
+            if (topiValue.tag != TopiValue.Tag.Bool) return;
             _evtVariable.Value = topiValue.Bool;
         }
     }
@@ -120,13 +120,13 @@ namespace PeartreeGames.Topiary.Unity
         {
             var name = _evtVariable.Name;
             var current = _conversation.Dialogue.GetValue(name);
-            if (current.tag != TopiValue.Tag.Number) return;
+            if (current.tag != TopiValue.Tag.String) return;
             _conversation.Dialogue.Set(name, value);
         }
 
         protected override void OnTopiValueChanged(ref TopiValue topiValue)
         {
-            if (topiValue.tag != TopiValue.Tag.Number) return;
+            if (topiValue.tag != TopiValue.Tag.String) return;
             _evtVariable.Value = topiValue.String;
         }
     }
