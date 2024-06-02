@@ -32,10 +32,17 @@ namespace PeartreeGames.Topiary.Unity
         public static readonly Dictionary<IntPtr, Conversation> Conversations = new();
         private static readonly Dictionary<string, EvtVariable> Variables = new();
         private static Delegates.Subscriber _subscriber;
+        private List<AsyncOperationHandle<EvtVariable>> _aoHandles;
         public static void AddSpeaker(TopiSpeaker speaker) => Speakers[speaker.name] = speaker;
         public static void RemoveSpeaker(TopiSpeaker speaker) => Speakers.Remove(speaker.name);
 
         public static readonly State State = new();
+
+        private void Awake()
+        {
+            _aoHandles = new List<AsyncOperationHandle<EvtVariable>>();
+        }
+
         private IEnumerator Start()
         {
             if (file == null)
@@ -185,6 +192,7 @@ namespace PeartreeGames.Topiary.Unity
         
         private IEnumerator LoadAddressableTopiValues()
         {
+            while (Dialogue?.Library == null) yield return null;
             var ao = Addressables.LoadResourceLocationsAsync(new List<string> {"Topiary", "Evt"},
                 Addressables.MergeMode.Intersection);
             yield return ao;
@@ -195,29 +203,46 @@ namespace PeartreeGames.Topiary.Unity
                 if (!_data.ExternsSet.Contains(key)) continue;
                 var aoEvt = Addressables.LoadAssetAsync<EvtVariable>(key);
                 yield return aoEvt;
-                
-                var topiName = aoEvt.Result switch
+
+                string topiName = null;
+                switch (aoEvt.Result)
                 {
-                    EvtTopiBool b => b.Name,
-                    EvtTopiFloat f => f.Name,
-                    EvtTopiInt i => i.Name,
-                    EvtTopiString s => s.Name,
-                    _ => null
-                };
+                    case EvtTopiBool b:
+                        topiName = b.Name;
+                        Dialogue.Set(topiName, b.Value);
+                        break;
+                    case EvtTopiFloat f: 
+                        topiName = f.Name;
+                        Dialogue.Set(topiName, f.Value);
+                        break; 
+                    case EvtTopiInt i:
+                        topiName = i.Name;
+                        Dialogue.Set(topiName, i.Value);
+                        break;
+                    case EvtTopiString s: 
+                        topiName = s.Name;
+                        Dialogue.Set(topiName, s.Value);
+                        break;
+                }
+                
                 if (topiName == null)
                 {
                     Addressables.Release(aoEvt);
                     continue;
                 }
+                
                 Variables[topiName] = aoEvt.Result;
+                Dialogue.Subscribe(topiName);
+                _aoHandles.Add(aoEvt);
             }
         }
 
         private void UnloadAddressableTopiValues()
         {
-            foreach (var kvp in Variables)
+            foreach (var kvp in Variables) Dialogue.Unsubscribe(kvp.Key);
+            foreach (var handle in _aoHandles)
             {
-                Addressables.Release(kvp.Value);
+                if (handle.IsValid()) Addressables.Release(handle);
             }
         }
     }
