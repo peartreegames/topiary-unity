@@ -81,10 +81,18 @@ Trigger the start of the Conversation in anyway you like with `conversation.Play
 
 ## Functions
 
-Topiary can call external functions that are marked with the `Topi` attribute. Here's some examples:
+Topiary can call external functions that are marked with the `Topi` attribute.
+
+Any **static** function with `IntPtr, byte` arguments and return type `TopiValue` is valid.
+Originally functions were wrapped and allowed for `TopiValue` arguments to hide the IntPtr
+and CreateArgs requirements, however Unity (the main use case for this package) will not work
+with this work flow. So a more manual approcate is required.
+
+`MonoPInvokeCallback` is also required by Unity.
+
+Here's some examples:
 
 ```csharp
-// Preserve used to make sure Unity doesn't strip these functions from your build
 public static class DialogueFunctions
 {
     // playAnim will be replaced with the C# method
@@ -151,10 +159,11 @@ value.Bool // true
 
 ## EvtVariables
 
-I've made [EvtVariables](https://github.com/peartreegames/evt-variables) the scriptableobject event system architecture a dependency of this package, though isn't actually necessary a lot of my tools use it. 
+I've made [EvtVariables](https://github.com/peartreegames/evt-variables) the scriptableobject event system architecture a dependency of this package, 
+though isn't actually necessary a lot of my tools use it. 
 If you prefer not to keep it, please feel free to fork this repo and remove it.
 
-EvtVariables are extents as EvtTopiVariables and used as runtime variable containers for any .topi `extern` variable.
+EvtVariables are extended as EvtTopiVariables and used as runtime variable containers for any .topi `extern` variable.
 
 Create one with `ContextMenu > Create > Evt > Topiary > [Type]`
 
