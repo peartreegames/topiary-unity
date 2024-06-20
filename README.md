@@ -71,7 +71,7 @@ public class DialogueRunner : MonoBehaviour
 
 ## Setup
 
-Any `.topi` file will automatically be compiled and a subasset will be created with the `.topib` bytecode.
+Any `.topi` file will automatically be compiled and a subasset will be created with the `.topi.byte` bytecode.
 
 Once your file is compiled it will automatically be added to a Topiary addressables group with the labels `Topiary` and `Topi`.
 

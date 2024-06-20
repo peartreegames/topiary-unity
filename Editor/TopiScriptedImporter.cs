@@ -38,7 +38,7 @@ namespace PeartreeGames.Topiary.Unity.Editor
 
 
                 // var boughs = ByteCode
-                var identifier = $"{fileName}b";
+                var identifier = $"{fileName}.byte";
                 var compiledAsset = ScriptableObject.CreateInstance<ByteData>();
                 compiledAsset.name = identifier;
                 compiledAsset.bytes = compiled;
