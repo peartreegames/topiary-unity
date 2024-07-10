@@ -39,6 +39,14 @@ namespace PeartreeGames.Topiary.Unity.Editor
                 addEntry?.SetAddress(newName);
             });
             elem.Add(field);
+            if (target is EvtTopiEnum)
+            {
+                var enumProp = serializedObject.FindProperty("topiEnum");
+                var enumField = new PropertyField(enumProp);
+                elem.Add(enumField);
+                elem.Remove(elem.Q<PropertyField>("value"));
+            }
+            elem.Insert(0, new Button(AddressablesSetup.SetupEvtTopiValuesInAddressables){ text = "Set Addressables" });
             return elem;
         }
     }

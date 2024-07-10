@@ -5,13 +5,14 @@ namespace PeartreeGames.Topiary.Unity.Editor
 {
     public static class AddressablesSetup
     {
-        [MenuItem("Assets/Setup Addressables for EvtTopiVariables")]
+        [MenuItem("Tools/Evt/Setup Addressables for EvtTopiVariables")]
         public static void SetupEvtTopiValuesInAddressables()
         {
             SetupEvtTopiVariable<EvtTopiBool, bool>();
             SetupEvtTopiVariable<EvtTopiInt, int>();
             SetupEvtTopiVariable<EvtTopiFloat, float>();
             SetupEvtTopiVariable<EvtTopiString, string>();
+            SetupEvtTopiVariable<EvtTopiEnum, string>();
         }
 
         private static void SetupEvtTopiVariable<T, TU>() where T : EvtTopiVariable<TU>

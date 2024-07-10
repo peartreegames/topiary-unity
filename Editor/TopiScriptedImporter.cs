@@ -1,10 +1,12 @@
 ﻿using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using UnityEditor;
 using UnityEditor.AddressableAssets;
 using UnityEditor.AssetImporters;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace PeartreeGames.Topiary.Unity.Editor
 {
@@ -15,38 +17,48 @@ namespace PeartreeGames.Topiary.Unity.Editor
         {
             using var streamReader = new StreamReader(ctx.assetPath, Encoding.UTF8);
             var text = streamReader.ReadToEnd();
-            var asset = new TextAsset(text);
             var fileName = Path.GetFileName(ctx.assetPath);
             var icon = Resources.Load<Texture2D>("topi");
             var byteIcon = Resources.Load<Texture2D>("byte");
             if (string.IsNullOrEmpty(text))
             {
-                ctx.AddObjectToAsset("main", asset, icon);
-                ctx.SetMainObject(asset);
+                var empty = new TextAsset(text);
+                ctx.AddObjectToAsset("main", empty, icon);
+                ctx.SetMainObject(empty);
                 return;
             }
+            
             var log = Logger(ctx);
+            Object asset;
             try
             {
+                Library.setDebugLog(Marshal.GetFunctionPointerForDelegate(log));
                 var absPath = Application.dataPath + ctx.assetPath[6..];
-                var compiled = Dialogue.Compile(absPath, log);
+                var size = Library.calculateCompileSize(absPath, absPath.Length);
+                var output = new byte[size];
+                _ = Library.compile(absPath, absPath.Length, output, size);
                 
-                using var memStream = new MemoryStream(compiled);
+                using var memStream = new MemoryStream(output);
                 using var reader = new BinaryReader(memStream);
-                var boughs = ByteCode.GetBoughs(reader);
-                if (boughs.Length == 0) return;
+                var boughs = ByteData.GetBoughs(reader);
+                if (boughs.Length == 0)
+                {
+                    var empty = new TextAsset(text);
+                    ctx.AddObjectToAsset("main", empty, icon);
+                    ctx.SetMainObject(empty);
+                    return;
+                }
 
-
-                // var boughs = ByteCode
                 var identifier = $"{fileName}.byte";
-                var compiledAsset = ScriptableObject.CreateInstance<ByteData>();
-                compiledAsset.name = identifier;
-                compiledAsset.bytes = compiled;
+                asset = ScriptableObject.CreateInstance<ByteData>();
+                asset.name = identifier;
+                ((ByteData)asset).bytes = output;
 
                 reader.BaseStream.Position = 0;
-                compiledAsset.ExternsSet = ByteCode.GetExterns(reader);
-                ctx.AddObjectToAsset(identifier, compiledAsset, byteIcon);
-
+                ((ByteData)asset).ExternsSet = ByteData.GetExterns(reader);
+                ctx.AddObjectToAsset("main", asset, byteIcon);
+                ctx.SetMainObject(asset);
+                
                 var guid = AssetDatabase.GUIDFromAssetPath(ctx.assetPath);
                 var settings = AddressableAssetSettingsDefaultObject.Settings;
                 settings.AddLabel("Topiary");
@@ -56,6 +68,7 @@ namespace PeartreeGames.Topiary.Unity.Editor
                     false, settings.DefaultGroup.Schemas);
                 var entry = settings.FindAssetEntry(guid.ToString());
                 if (entry != null && entry.parentGroup == group) return;
+                
                 var addressable = settings.CreateOrMoveEntry(guid.ToString(), group);
                 addressable.address = fileName;
                 addressable.SetLabel("Topiary", true);
@@ -64,21 +77,18 @@ namespace PeartreeGames.Topiary.Unity.Editor
             }
             catch (EndOfStreamException)
             {
+                asset = new TextAsset(text);
                 icon = Resources.Load<Texture2D>("error");
+                ctx.AddObjectToAsset("main", asset, icon);
+                ctx.SetMainObject(asset);
             }
             catch (Exception e)
             {
                 Debug.LogError(e);
             }
-            finally
-            {
-                ctx.AddObjectToAsset("main", asset, icon);
-                ctx.SetMainObject(asset);
-            }
-
         }
 
-        private static Delegates.OutputLogDelegate Logger(AssetImportContext ctx) =>
+        private static Library.OutputLogDelegate Logger(AssetImportContext ctx) =>
             (intPtr, severity) =>
             {
                 var msg = Library.PtrToUtf8String(intPtr);

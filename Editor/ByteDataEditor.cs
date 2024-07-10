@@ -1,7 +1,7 @@
-﻿using System;
+﻿using System.IO;
+using System.Text;
 using UnityEditor;
 using UnityEditor.UIElements;
-using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace PeartreeGames.Topiary.Unity.Editor
@@ -11,31 +11,34 @@ namespace PeartreeGames.Topiary.Unity.Editor
     {
         private ByteData _byteData;
         private SerializedProperty _externsProperty;
+        private string text;
 
         private void OnEnable()
         {
             _byteData = (ByteData) target;
             _externsProperty = serializedObject.FindProperty("externs");
+            using var streamReader = new StreamReader(AssetDatabase.GetAssetPath(target), Encoding.UTF8);
+            text = streamReader.ReadToEnd();
         }
 
         public override VisualElement CreateInspectorGUI()
         {
             var elem = new VisualElement();
+            
+            var d = _byteData.bytes;
+            elem.Add(new Label($"Compiled: {d.Length:N0} bytes\n"));
+            
             var externsField = new PropertyField(_externsProperty);
             externsField.SetEnabled(false);
             elem.Add(externsField); 
-            var d = _byteData.bytes;
-            elem.Add(new Label($"Compiled {d.Length}\n"));
-            var text = BitConverter.ToString(d)[..Mathf.Min(d.Length + 1, 4001)];
-            if (d.Length > 4001) text += "...";
-            var dataLabel = new Label(text)
-                {
-                    style =
-                    {
-                        whiteSpace = WhiteSpace.Normal
-                    }
-                };
-            elem.Add(dataLabel);
+            
+            var textField = new TextField
+            {
+                isReadOnly = true,
+                value = text
+            };
+            elem.Add(textField);
+            
             return elem;
         }
     }

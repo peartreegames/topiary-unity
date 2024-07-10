@@ -11,12 +11,12 @@ namespace PeartreeGames.Topiary.Unity
         
         protected void Awake()
         {
-            Conversation.AddSpeaker(this);
+            Dialogue.AddSpeaker(this);
         }
 
         protected void OnDestroy()
         {
-            Conversation.RemoveSpeaker(this);
+            Dialogue.RemoveSpeaker(this);
         }
 
         public void StartSpeaking() => onStartSpeaking.Invoke(this);
