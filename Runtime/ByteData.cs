@@ -22,9 +22,7 @@ namespace PeartreeGames.Topiary.Unity
         /// </summary>
         [SerializeField] private string[] externs;
 
-        /// of strings, while the `OnAfterDeserialize` method recreates the `ExternsSet` from the deserialized array.
         public SortedSet<string> ExternsSet;
-
         public void OnBeforeSerialize() => externs = ExternsSet?.ToArray();
 
         public void OnAfterDeserialize() => ExternsSet = new SortedSet<string>(externs);

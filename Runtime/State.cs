@@ -14,28 +14,17 @@ namespace PeartreeGames.Topiary.Unity
         }
 
         /// <summary>
-        /// Add current Dialogue values to the State
+        /// Add current JSON values to the State
         /// </summary>
-        /// <param name="dialogue"></param>
-        public void Amend(Dialogue dialogue)
+        /// <param name="jsonString"></param>
+        public void Amend(string jsonString)
         {
-            var state = dialogue.SaveState();
-            if (_rootState == null) _rootState = JObject.Parse(state);
+            if (_rootState == null) _rootState = JObject.Parse(jsonString);
             else
             {
-                var jObj = JObject.Parse(state);
+                var jObj = JObject.Parse(jsonString);
                 foreach (var item in jObj) _rootState[item.Key] = item.Value;
             }
-        }
-
-        /// <summary>
-        /// Load the current State into the Dialogue
-        /// </summary>
-        /// <param name="dialogue"></param>
-        public void Inject(Dialogue dialogue)
-        {
-            if (_rootState == null) return;
-            dialogue.LoadState(Value); 
         }
     }
 }
