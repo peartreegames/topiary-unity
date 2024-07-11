@@ -1,6 +1,6 @@
 # Topiary.Unity
 
-Unity Integration for the dialogue scripting tool [topiary](https://github.com/peartreegames/topiary) with the [C# bindings](https://github.com/peartreegames/topiary-csharp).
+Unity Integration for the dialogue scripting tool [topiary](https://github.com/peartreegames/topiary).
 
 Checkout the [syntax](https://peartree.games/topiary/docs/syntax) file if you're new to writing with Topi.
 
@@ -19,7 +19,6 @@ https://github.com/peartreegames/topiary-unity.git
 ## Setup
 
 You'll need some sort of singleton DialogueRunner to go between Topiary and your UI.
-
 Here's a rough sketch:
 
 ```csharp
@@ -27,30 +26,30 @@ public class DialogueRunner : MonoBehaviour
 {
     private void Awake()
     {
-        Conversation.OnStart += OnStart;
-        Conversation.OnEnd += OnEnd;
-        Conversation.OnLine += OnLine;
-        Conversation.OnChoices += OnChoices;
+        Dialogue.OnStart += OnStart;
+        Dialogue.OnEnd += OnEnd;
+        Dialogue.OnLine += OnLine;
+        Dialogue.OnChoices += OnChoices;
     }
 
     private void OnDestroy()
     {
-        Conversation.OnStart -= OnStart;
-        Conversation.OnEnd -= OnEnd;
-        Conversation.OnLine -= OnLine;
-        Conversation.OnChoices -= OnChoices;
+        Dialogue.OnStart -= OnStart;
+        Dialogue.OnEnd -= OnEnd;
+        Dialogue.OnLine -= OnLine;
+        Dialogue.OnChoices -= OnChoices;
     }
 
-    private void OnStart(Dialogue dialogue, Conversation conversation)
+    private void OnStart(Dialogue dialogue)
     {
-        // Update the UI
-        // Perform any tasks for line mode
+        // Open/Update the UI
+        // Perform any tasks for dialogue to start
     }
 
     private void OnLine(Dialogue dialogue, Line line, TopiSpeaker topiSpeaker)
     {
-        // Update the UI to display the line
-        // Use dialogue.SelectContinue() to continue the dialogue
+        // Update the UI to display the next line
+        // Use dialogue.SelectContinue() to continue the script
     }
 
     private void OnChoices(Dialogue dialogue, Choice[] choices)
@@ -59,10 +58,9 @@ public class DialogueRunner : MonoBehaviour
         // Use dialogue.SelectChoice(int) when the player makes their selection
     }
 
-
-    private void OnEnd(Dialogue dialogue, Conversation conversation)
+    private void OnEnd(Dialogue dialogue)
     {
-        // Close your UI
+        // Close/Update your UI
         // Perform any clean up tasks
         // Revert back to game mode
     }
@@ -71,13 +69,13 @@ public class DialogueRunner : MonoBehaviour
 
 ## Setup
 
-Any `.topi` file will automatically be compiled and a subasset will be created with the `.topi.byte` bytecode.
+Any `.topi` file will automatically be compiled and converted into a `.topi.byte` bytecode.
 
-Once your file is compiled it will automatically be added to a Topiary addressables group with the labels `Topiary` and `Topi`.
+Once your file is compiled it will automatically be added to a Topiary Addressables group with the labels `Topiary` and `Topi`.
 
-Add a `Conversation` MonoBehaviour to a GameObject and select the `.topi` file you want to associate with that Conversation.
+Add a `Dialogue` MonoBehaviour to a GameObject and select the `.topi` file you want to associate with that Conversation.
 
-Trigger the start of the Conversation in anyway you like with `conversation.PlayDialogue()` or `StartCoroutine(conversation.Play())`
+Trigger the start of the Conversation in any way you like with `conversation.PlayDialogue()` or `StartCoroutine(conversation.Play())`
 
 ## Functions
 
@@ -86,7 +84,7 @@ Topiary can call external functions that are marked with the `Topi` attribute.
 Any **static** function with `IntPtr, byte` arguments and return type `TopiValue` is valid.
 Originally functions were wrapped and allowed for `TopiValue` arguments to hide the IntPtr
 and CreateArgs requirements, however Unity (the main use case for this package) will not work
-with this work flow. So a more manual approcate is required.
+with this work flow. So a more manual approach is required.
 
 `MonoPInvokeCallback` is also required by Unity.
 
@@ -108,9 +106,8 @@ public static class DialogueFunctions
         var args = TopiValue.CreateArgs(argsPtr, count);
         var speakerName = args[0];
         var animClip = args[1];
-        if (!Conversation.Speakers.TryGetValue(speakerName.String, out var topi) ||
-            !topi.TryGetComponent(out Speaker speaker)) return default;
-        speaker.PlayAnim(animClip.String);
+        if (!Conversation.Speakers.TryGetValue(speakerName.String, out var topi)) return default;
+        // get Animator component and play clip
         return default;
     }
 }
@@ -118,9 +115,10 @@ public static class DialogueFunctions
 
 ## TopiValue
 
-I wanted to hide away the [TopiValue](https://github.com/peartreegames/topiary-csharp/blob/main/Topiary/TopiValue.cs) implementation details, but without boxing everything to just `object` it didn't seem viable.
+I wanted to hide away the [TopiValue](https://github.com/peartreegames/topiary-unity/blob/main/Runtime/TopiValue.cs) implementation details, 
+but without boxing everything to just `object` it didn't seem viable.
 
-So instead here's your warning: TopiValues have data are explicitly mapped out in memory and different fields are overlaying each other.
+So instead here's your warning: TopiValues have data that are explicitly mapped out in memory and different fields are overlaying each other.
 
 ```csharp
     [StructLayout(LayoutKind.Sequential)]
@@ -134,21 +132,17 @@ So instead here's your warning: TopiValues have data are explicitly mapped out i
     [StructLayout(LayoutKind.Explicit)]
     public struct TopiValueData
     {
-        [FieldOffset(0)] [MarshalAs(UnmanagedType.I1)]
-        public byte boolValue;
-
-        [FieldOffset(0)] [MarshalAs(UnmanagedType.R4)]
-        public float numberValue;
-
+        [FieldOffset(0)] [MarshalAs(UnmanagedType.I1)] public byte boolValue;
+        [FieldOffset(0)] [MarshalAs(UnmanagedType.R4)] public float numberValue;
         [FieldOffset(0)] public IntPtr stringValue;
-
         [FieldOffset(0)] public TopiList listValue;
+        [FieldOffset(0)] public TopiEnum enumValue;
     }
 ```
 
 This means you are required to check the `tag` field before accessing the data to know which field is currently active or use a switch statement.
 If you prefer to accept an `object` you can use the `Value` property. Or if you're sure of the type (like in the Topi functions above)
-you can use the named properties directly, just be careful. `Bool`, `Int`, `Float`, `String`, `List`, `Set`, `Map`.
+you can use the named properties directly, just be careful. `Bool`, `Int`, `Float`, `String`, `List`, `Set`, `Map`, `Enum`.
 
 ```csharp
 var value = new TopiValue(true);
@@ -159,8 +153,8 @@ value.Bool // true
 
 ## EvtVariables
 
-I've made [EvtVariables](https://github.com/peartreegames/evt-variables) the scriptableobject event system architecture a dependency of this package, 
-though isn't actually necessary a lot of my tools use it. 
+I've made [EvtVariables](https://github.com/peartreegames/evt-variables), a scriptableobject event system architecture, a dependency of this package.
+Though it isn't actually necessary, a lot of my tools use it. 
 If you prefer not to keep it, please feel free to fork this repo and remove it.
 
 EvtVariables are extended as EvtTopiVariables and used as runtime variable containers for any .topi `extern` variable.
@@ -170,4 +164,4 @@ Create one with `ContextMenu > Create > Evt > Topiary > [Type]`
 Then set the `Topi Variable Name` to the name in the .topi file.
 
 Topiary.Unity will automatically add the object to the Addressables `Topiary` group with labels `Topiary` and `Evt`.
-Then each Conversation will automatically load the EvtVariables and hook up callbacks with the Topiary VM.
+Then each Dialogue will automatically load the EvtVariables and hook up callbacks with the Topiary VM.
