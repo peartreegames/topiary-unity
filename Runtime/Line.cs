@@ -11,21 +11,19 @@ namespace PeartreeGames.Topiary.Unity
     [StructLayout(LayoutKind.Sequential)]
     public readonly struct Line
     {
-        private readonly IntPtr _contentPtr;
-        [MarshalAs(UnmanagedType.U4)] private readonly int _contentLen;
-        private readonly IntPtr _speakerPtr;
-        [MarshalAs(UnmanagedType.U4)] private readonly int _speakerLen;
+        private readonly StringBuffer _content;
+        private readonly StringBuffer _speaker;
         private readonly IntPtr _tagsPtr;
         private readonly byte _tagsLen;
-        
+
         /// <summary>
         /// The Speaker of the dialogue line
         /// </summary>
-        public string Speaker => Library.PtrToUtf8String(_speakerPtr, _speakerLen);
+        public string Speaker => _speaker.Value; 
         /// <summary>
         /// The words spoken
         /// </summary>
-        public string Content => Library.PtrToUtf8String(_contentPtr, _contentLen);
+        public string Content => _content.Value;
         
         /// <summary>
         /// Array of tags
@@ -40,7 +38,7 @@ namespace PeartreeGames.Topiary.Unity
                 for (var i = 0; i < _tagsLen; i++)
                 {
                     var ptr = Marshal.ReadIntPtr(_tagsPtr, offset);
-                    tags[i] = Library.PtrToUtf8String(ptr);
+                    tags[i] = Marshal.PtrToStructure<StringBuffer>(ptr).Value;
                     offset += IntPtr.Size;
                 }
                 return tags;

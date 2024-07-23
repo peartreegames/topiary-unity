@@ -4,7 +4,7 @@ using UnityEngine;
 namespace PeartreeGames.Topiary.Unity
 {
     [CreateAssetMenu(fileName = "so_", menuName = "TopiEnum", order = 10)]
-    public class TopiEnumObject : ScriptableObject
+    public class EnumObject : ScriptableObject
     {
         [SerializeField] private new string name;
         [SerializeField] private bool isSequence;
@@ -21,9 +21,9 @@ namespace PeartreeGames.Topiary.Unity
     }
 
     [Serializable]
-    public class TopiEnumReference
+    public class EnumReference
     {
-        [SerializeField] private TopiEnumObject enumObject;
+        [SerializeField] private EnumObject enumObject;
         [SerializeField] private string enumValue;
 
         public bool IsSequence => enumObject?.IsSequence ?? false;

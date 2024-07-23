@@ -17,52 +17,70 @@ namespace PeartreeGames.Topiary.Unity
         [SerializeField] private string[] tags;
         [SerializeField] private AssetReferenceT<ByteData> file;
         [SerializeField] private Library.Severity logs = Library.Severity.Error;
-        
+
         private ByteData _data;
-        private TopiSpeaker _previousSpeaker;
+        private Speaker _previousSpeaker;
         private GCHandle _pinnedHandle;
         private IntPtr _vmPtr;
-        
+        private List<AsyncOperationHandle<EvtVariable>> _aoHandles;
+
         public string[] Tags => tags;
-        
-        public static event Action<Dialogue> OnCreated;
+
         public static event Action<Dialogue> OnStart;
         public static event Action<Dialogue> OnEnd;
-        public static event Action<Dialogue, Line, TopiSpeaker> OnLine;
+        public static event Action<Dialogue, Line, Speaker> OnLine;
         public static event Action<Dialogue, Choice[]> OnChoices;
+        public static event Action<Dialogue, string, TopiValue> OnValueChanged;
 
         [ShowInInspector]
         public static readonly State State = new();
-        public static readonly Dictionary<string, TopiSpeaker> Speakers = new();
-        private static readonly Dictionary<IntPtr, Dialogue> Conversations = new();
+        public static readonly Dictionary<string, Speaker> Speakers = new();
+        public static readonly Dictionary<IntPtr, Dialogue> Dialogues = new();
         private static readonly Dictionary<string, EvtVariable> Variables = new();
-        private List<AsyncOperationHandle<EvtVariable>> _aoHandles;
-        
-        private static Library.OnChoicesDelegate _onChoicesCallback;
-        private static Library.OnLineDelegate _onLineCallback;
-        private static Library.SubscriberDelegate _subscriberCallback;
-        private static Library.OutputLogDelegate _onLogCallback;
+        private static readonly Dictionary<string, Delegate> Callbacks = new();
+        private static readonly List<TopiAttribute.FuncPtr> FunctionPtrs = new();
+
+        private static Delegates.OnChoicesDelegate _onChoicesCallback;
+        private static Delegates.OnLineDelegate _onLineCallback;
+        private static Delegates.SubscriberDelegate _subscriberCallback;
+        private static Delegates.OutputLogDelegate _onLogCallback;
+        private static Delegates.FreeDelegate _freeCallback;
         private static IntPtr _choicesPtr;
         private static IntPtr _linePtr;
         private static IntPtr _subscriberPtr;
         private static IntPtr _logPtr;
-        
+        private static IntPtr _freePtr;
+
+        private bool IsVmValid
+        {
+            get
+            {
+                if (!_vmPtr.Equals(IntPtr.Zero)) return true;
+                Log("[Topiary.Unity] Invalid Vm", Library.Severity.Error);
+                return false;
+            }
+        }
+
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void Init()
         {
             Speakers.Clear();
-            Conversations.Clear();
+            Dialogues.Clear();
             Variables.Clear();
+            Callbacks.Clear();
+            FunctionPtrs.Clear();
             _onChoicesCallback ??= OnChoicesCallback;
             _onLineCallback ??= OnLineCallback;
             _onLogCallback ??= LogCallback;
-            _subscriberCallback ??= ValueChanged;
+            _subscriberCallback ??= ValueChangedCallback;
+            _freeCallback ??= Free;
             _subscriberPtr = Marshal.GetFunctionPointerForDelegate(_subscriberCallback);
             _linePtr = Marshal.GetFunctionPointerForDelegate(_onLineCallback);
             _choicesPtr = Marshal.GetFunctionPointerForDelegate(_onChoicesCallback);
             _logPtr = Marshal.GetFunctionPointerForDelegate(_onLogCallback);
-            Library.setDebugLog(_logPtr);
+            _freePtr = Marshal.GetFunctionPointerForDelegate(_freeCallback);
+            FunctionPtrs.AddRange(TopiAttribute.GetAllTopiMethodPtrs());
         }
 
         private void Awake()
@@ -101,11 +119,11 @@ namespace PeartreeGames.Topiary.Unity
 
             _pinnedHandle = GCHandle.Alloc(_data.bytes, GCHandleType.Pinned);
             var sourcePtr = Marshal.UnsafeAddrOfPinnedArrayElement(_data.bytes, 0);
-            _vmPtr = Library.createVm(sourcePtr, _data.bytes.Length, _linePtr, _choicesPtr);
-            OnCreated?.Invoke(this);
-            Conversations.Add(_vmPtr, this);
+            _vmPtr = Library.createVm(sourcePtr, _data.bytes.Length, _linePtr, _choicesPtr,
+                _subscriberPtr, _logPtr, logs);
+            Dialogues.Add(_vmPtr, this);
         }
-        
+
         private void OnDestroy()
         {
             UnloadTopiValues();
@@ -114,27 +132,37 @@ namespace PeartreeGames.Topiary.Unity
             _vmPtr = IntPtr.Zero;
             if (file.IsValid()) file.ReleaseAsset();
         }
-        public static void AddSpeaker(TopiSpeaker speaker) => Speakers[speaker.name] = speaker;
-        public static void RemoveSpeaker(TopiSpeaker speaker) => Speakers.Remove(speaker.name);
-        public void Continue() => Library.selectContinue(_vmPtr);
-        public void SelectChoice(int index) => Library.selectChoice(_vmPtr, index);
+
+        public static void AddSpeaker(Speaker speaker) => Speakers[speaker.Id] = speaker;
+        public static void RemoveSpeaker(Speaker speaker) => Speakers.Remove(speaker.Id);
+
+        public void Continue()
+        {
+            if (IsVmValid) Library.selectContinue(_vmPtr);
+        }
+
+        public void SelectChoice(int index)
+        {
+            if (_vmPtr.Equals(IntPtr.Zero))
+            {
+                Log("[Topiary.Unity] Invalid Vm", Library.Severity.Error);
+                return;
+            }
+
+            Library.selectChoice(_vmPtr, index);
+        }
+
         public void PlayDialogue() => StartCoroutine(Play());
 
         public IEnumerator Play()
         {
-            if (_vmPtr.Equals(IntPtr.Zero))
-            {
-                Log("[Topiary.Unity] Invalid Dialogue", Library.Severity.Error);
-                yield break;
-            }
-
-            SetDebugCallback();
-            LoadState(State.Value); 
+            if (!IsVmValid) yield break;
+            LoadState(State.Value);
+            LoadFunctions();
             yield return StartCoroutine(LoadTopiValues());
-            
+
             OnStart?.Invoke(this);
-            
-            Library.start(_vmPtr, bough, bough.Length);
+            Library.start(_vmPtr, bough);
             while (Library.canContinue(_vmPtr))
             {
                 try
@@ -146,6 +174,7 @@ namespace PeartreeGames.Topiary.Unity
                     Log($"Caught an SEHException: {ex}", Library.Severity.Error);
                     break;
                 }
+
                 while (Library.isWaiting(_vmPtr)) yield return null;
             }
 
@@ -158,107 +187,75 @@ namespace PeartreeGames.Topiary.Unity
 
         public string SaveState()
         {
+            if (!IsVmValid) return null;
             var capacity = Library.calculateStateSize(_vmPtr);
             var output = new byte[capacity];
             _ = Library.saveState(_vmPtr, output, output.Length);
             return System.Text.Encoding.UTF8.GetString(output);
         }
 
-        public void LoadState(string json) => Library.loadState(_vmPtr, json, json.Length);
-        
+        public void LoadState(string json)
+        {
+            if (json != null && IsVmValid) Library.loadState(_vmPtr, json, json.Length);
+        }
+
         public bool Subscribe(string variableName) =>
-            Library.subscribe(_vmPtr, variableName, variableName.Length);
+            IsVmValid && Library.subscribe(_vmPtr, variableName);
 
         /// <summary>
         /// Unsubscribe when a Global variable changes
         /// </summary>
         /// <param name="variableName">The name of the variable</param>
         public bool Unsubscribe(string variableName) =>
-            Library.unsubscribe(_vmPtr, variableName, variableName.Length);
+            IsVmValid && Library.unsubscribe(_vmPtr, variableName);
 
         /// <summary>
-        /// Set an Extern variable to a bool value
+        /// Set an Extern variable to a TopiValue
         /// </summary>
         /// <param name="variableName">The name of the variable</param>
         /// <param name="value">The value to set</param>
-        public void Set(string variableName, bool value) =>
-            Library.setExternBool(_vmPtr, variableName, variableName.Length, value);
+        public void Set(string variableName, TopiValue value) =>
+            Library.setExtern(_vmPtr, variableName, value, _freePtr);
 
-        /// <summary>
-        /// Set an Extern variable to a float value
-        /// </summary>
-        /// <param name="variableName">The name of the variable</param>
-        /// <param name="value">The value to set</param>
-        public void Set(string variableName, float value) =>
-            Library.setExternNumber(_vmPtr, variableName, variableName.Length, value);
-
-        /// <summary>
-        /// Set an Extern variable to an enum value
-        /// </summary>
-        /// <param name="variableName"></param>
-        /// <param name="enumName"></param>
-        /// <param name="enumValue"></param>
-        public void Set(string variableName, string enumName, string enumValue) =>
-            Library.setExternEnum(_vmPtr, variableName, variableName.Length, enumName, enumName.Length, enumValue,
-                enumValue.Length);
-
-        /// <summary>
-        /// Set an Extern variable to a float value
-        /// </summary>
-        /// <param name="variableName">The name of the variable</param>
-        /// <param name="value">The value to set</param>
-        public void Set(string variableName, string value) =>
-            Library.setExternString(_vmPtr, variableName, variableName.Length, value, value.Length);
-
-        /// <summary>
-        /// Set a Global Extern variable to a function value
-        /// Note: It is easier to use the TopiAttribute instead with the BindFunctions method
-        /// However this is kept in case you need more control 
-        /// </summary>
-        /// <param name="function">The function to set</param>
-        public void Set(Library.ExternFunctionDelegate function)
-        {
-            var methodInfo = function.Method;
-            var topiAttributes = methodInfo.GetCustomAttributes(typeof(TopiAttribute), false);
-            if (topiAttributes.Length > 1)
-                throw new InvalidOperationException(
-                    $"Only one instance of TopiAttribute is allowed on function {methodInfo.Name}");
-
-            foreach (TopiAttribute topiAttribute in topiAttributes)
-            {
-                var topiName = topiAttribute.Name;
-                var arity = topiAttribute.Arity;
-                Library.setExternFunc(_vmPtr, topiName, topiName.Length,
-                    Marshal.GetFunctionPointerForDelegate(function), arity);
-            }
-        }
-
-        /// <summary>
-        /// Set an Extern variable to a nil value
-        /// </summary>
-        /// <param name="variableName">The name of the variable</param>
-        public void Unset(string variableName) => Library.setExternNil(_vmPtr, variableName, variableName.Length);
-        
-        [MonoPInvokeCallback(typeof(Library.OnLineDelegate))]
+        [MonoPInvokeCallback(typeof(Delegates.OnLineDelegate))]
         private static void OnLineCallback(IntPtr vmPtr, Line line)
         {
-            var convo = Conversations[vmPtr];
-            if (convo._previousSpeaker != null) convo._previousSpeaker.StopSpeaking();
+            if (!Dialogues.TryGetValue(vmPtr, out var dialogue))
+            {
+                Log($"[Topiary.Unity] Dialogue not found for vmPtr {vmPtr.ToInt64()}",
+                    Library.Severity.Error);
+                return;
+            }
+
+            if (dialogue._previousSpeaker != null) dialogue._previousSpeaker.StopSpeaking();
             if (Speakers.TryGetValue(line.Speaker, out var speaker)) speaker.StartSpeaking();
-            convo._previousSpeaker = speaker;
-            OnLine?.Invoke(convo, line, speaker);
+            dialogue._previousSpeaker = speaker;
+            OnLine?.Invoke(dialogue, line, speaker);
         }
 
-        [MonoPInvokeCallback(typeof(Library.OnChoicesDelegate))]
+        [MonoPInvokeCallback(typeof(Delegates.OnChoicesDelegate))]
         private static void OnChoicesCallback(IntPtr vmPtr, IntPtr choicesPtr, byte count)
         {
-            var convo = Conversations[vmPtr];
-            OnChoices?.Invoke(convo, Choice.MarshalPtr(choicesPtr, count));
+            if (!Dialogues.TryGetValue(vmPtr, out var dialogue))
+            {
+                Log($"[Topiary.Unity] Dialogue not found for vmPtr {vmPtr.ToInt64()}",
+                    Library.Severity.Error);
+                return;
+            }
+
+            OnChoices?.Invoke(dialogue, Choice.MarshalPtr(choicesPtr, count));
         }
-        
-        [MonoPInvokeCallback(typeof(Library.SubscriberDelegate))]
-        private static void ValueChanged(string name, ref TopiValue value)
+
+        [MonoPInvokeCallback(typeof(Delegates.SubscriberDelegate))]
+        private static void ValueChangedCallback(IntPtr vmPtr, string name, TopiValue value)
         {
+            if (!Dialogues.TryGetValue(vmPtr, out var dialogue))
+            {
+                Log($"[Topiary.Unity] Dialogue not found for vmPtr {vmPtr.ToInt64()}",
+                    Library.Severity.Error);
+                return;
+            }
+
             if (Variables.TryGetValue(name, out var variable))
             {
                 switch (value.tag)
@@ -285,11 +282,16 @@ namespace PeartreeGames.Topiary.Unity
                         break;
                 }
             }
+
+            OnValueChanged?.Invoke(dialogue, name, value);
         }
 
-        [MonoPInvokeCallback(typeof(Library.OutputLogDelegate))]
-        private static void LogCallback(IntPtr intPtr, Library.Severity severity) =>
-            Log(Library.PtrToUtf8String(intPtr), severity);
+        [MonoPInvokeCallback(typeof(Delegates.OutputLogDelegate))]
+        private static void LogCallback(StringBuffer str, Library.Severity severity) =>
+            Log(str.Value, severity);
+
+        [MonoPInvokeCallback(typeof(Delegates.FreeDelegate))]
+        internal static void Free(IntPtr ptr) => Marshal.FreeHGlobal(ptr);
 
         private static void Log(string msg, Library.Severity severity)
         {
@@ -309,7 +311,16 @@ namespace PeartreeGames.Topiary.Unity
                     throw new ArgumentOutOfRangeException(nameof(severity), severity, null);
             }
         }
-        
+
+        private void LoadFunctions()
+        {
+            foreach (var func in FunctionPtrs)
+            {
+                if (_data.ExternsSet.Contains(func.Name))
+                    Library.setExternFunc(_vmPtr, func.Name, func.Ptr, func.Arity, _freePtr);
+            }
+        }
+
         private IEnumerator LoadTopiValues()
         {
             var ao = Addressables.LoadResourceLocationsAsync(new List<string> { "Topiary", "Evt" },
@@ -328,23 +339,38 @@ namespace PeartreeGames.Topiary.Unity
                 {
                     case EvtTopiBool b:
                         topiName = b.Name;
-                        Set(topiName, b.Value);
+                        Set(topiName, new TopiValue(b));
+                        Callbacks[topiName] =
+                            new Action<bool>(v => Set(topiName, new TopiValue(v)));
+                        b.OnEvt += (Action<bool>)Callbacks[topiName];
                         break;
                     case EvtTopiFloat f:
                         topiName = f.Name;
-                        Set(topiName, f.Value);
-                        break; 
+                        Set(topiName, new TopiValue(f));
+                        Callbacks[topiName] =
+                            new Action<float>(v => Set(topiName, new TopiValue(v)));
+                        f.OnEvt += (Action<float>)Callbacks[topiName];
+                        break;
                     case EvtTopiInt i:
                         topiName = i.Name;
-                        Set(topiName, i.Value);
+                        Set(topiName, new TopiValue(i));
+                        Callbacks[topiName] = new Action<int>(v => Set(topiName, new TopiValue(v)));
+                        i.OnEvt += (Action<int>)Callbacks[topiName];
                         break;
                     case EvtTopiString s:
                         topiName = s.Name;
-                        Set(topiName, s.Value);
+                        Set(topiName, new TopiValue(s));
+                        Callbacks[topiName] =
+                            new Action<string>(v => Set(topiName, new TopiValue(v)));
+                        s.OnEvt += (Action<string>)Callbacks[topiName];
                         break;
                     case EvtTopiEnum e:
                         topiName = e.Name;
-                        Set(topiName, e.Enum.Name, e.Value);
+                        Debug.Log($"Setting {topiName} to {e.Name}.{e.Value}");
+                        Set(topiName, new TopiValue(e.Name, e.Value));
+                        Callbacks[topiName] =
+                            new Action<string>(v => Set(topiName, new TopiValue(e.Name, v)));
+                        e.OnEvt += (Action<string>)Callbacks[topiName];
                         break;
                 }
 
@@ -356,10 +382,13 @@ namespace PeartreeGames.Topiary.Unity
 
                 if (!Subscribe(topiName))
                 {
-                    Log($"[Topiary.Unity] Could not Subscribe to {topiName}", Library.Severity.Warn);
+                    Log($"[Topiary.Unity] Could not Subscribe to {topiName}",
+                        Library.Severity.Warn);
+                    UnsubscribeEvt(topiName, aoEvt.Result);
                     Addressables.Release(aoEvt);
                     continue;
                 }
+
                 Variables[topiName] = aoEvt.Result;
                 _aoHandles.Add(aoEvt);
             }
@@ -367,17 +396,39 @@ namespace PeartreeGames.Topiary.Unity
 
         private void UnloadTopiValues()
         {
-            foreach (var kvp in Variables) Unsubscribe(kvp.Key);
+            foreach (var kvp in Variables)
+            {
+                Unsubscribe(kvp.Key);
+                UnsubscribeEvt(kvp.Key, kvp.Value);
+            }
+
             foreach (var handle in _aoHandles)
             {
                 if (handle.IsValid()) Addressables.Release(handle);
             }
         }
 
-        private void SetDebugCallback()
+        private static void UnsubscribeEvt(string topiName, EvtVariable evt)
         {
-            Library.setSubscriberCallback(_vmPtr, _subscriberPtr);
-            Library.setDebugSeverity(logs);
+            if (!Callbacks.TryGetValue(topiName, out var del)) return;
+            switch (evt)
+            {
+                case EvtTopiBool b:
+                    b.OnEvt -= (Action<bool>)del;
+                    break;
+                case EvtTopiFloat f:
+                    f.OnEvt -= (Action<float>)del;
+                    break;
+                case EvtTopiInt i:
+                    i.OnEvt -= (Action<int>)del;
+                    break;
+                case EvtTopiString s:
+                    s.OnEvt -= (Action<string>)del;
+                    break;
+                case EvtTopiEnum e:
+                    e.OnEvt -= (Action<string>)del;
+                    break;
+            }
         }
     }
 }

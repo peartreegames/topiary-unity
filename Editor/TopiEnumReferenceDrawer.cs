@@ -6,7 +6,7 @@ using UnityEngine.UIElements;
 
 namespace PeartreeGames.Topiary.Unity.Editor
 {
-    [CustomPropertyDrawer(typeof(TopiEnumReference))]
+    [CustomPropertyDrawer(typeof(EnumReference))]
     public class TopiEnumReferenceDrawer : PropertyDrawer
     {
         public override VisualElement CreatePropertyGUI(SerializedProperty property)
@@ -19,7 +19,7 @@ namespace PeartreeGames.Topiary.Unity.Editor
 
             enumObjField.RegisterCallback<ChangeEvent<Object>>(evt =>
             {
-                var enumObject = enumObjectProperty.objectReferenceValue as TopiEnumObject;
+                var enumObject = enumObjectProperty.objectReferenceValue as EnumObject;
                 if (enumObject == null) return;
 
                 dropdownField.choices.Clear();

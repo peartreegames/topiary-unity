@@ -11,9 +11,9 @@ namespace PeartreeGames.Topiary.Unity
     /// or check tag if unknown
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    public struct TopiValue : IDisposable, IEquatable<TopiValue>
+    public struct TopiValue : IEquatable<TopiValue>
     {
-        [MarshalAs(UnmanagedType.U1)] public Tag tag;
+        public Tag tag;
         private TopiValueData _data;
 
         /// <summary>
@@ -22,7 +22,7 @@ namespace PeartreeGames.Topiary.Unity
         /// <param name="ptr">The pointer to the TopiValue struct.</param>
         /// <returns>The converted TopiValue.</returns>
         public static TopiValue FromPtr(IntPtr ptr) => Marshal.PtrToStructure<TopiValue>(ptr);
-
+        
         public TopiValue(bool b)
         {
             tag = Tag.Bool;
@@ -55,7 +55,7 @@ namespace PeartreeGames.Topiary.Unity
             tag = Tag.String;
             _data = new TopiValueData
             {
-                stringValue = Marshal.StringToHGlobalAnsi(s)
+                stringValue = new StringBuffer(s)
             };
         }
 
@@ -64,11 +64,7 @@ namespace PeartreeGames.Topiary.Unity
             tag = Tag.Enum;
             _data = new TopiValueData
             {
-                enumValue = new TopiEnum
-                {
-                    namePtr = Marshal.StringToHGlobalAnsi(enumName),
-                    valuePtr = Marshal.StringToHGlobalAnsi(enumValue)
-                }
+                enumValue = new TopiEnum(enumName, enumValue)
             };
         }
 
@@ -77,45 +73,14 @@ namespace PeartreeGames.Topiary.Unity
         /// </summary>
         public enum Tag : byte
         {
-            /// <summary>
-            /// Represents the Nil tag of the <see cref="Tag"/> enum.
-            /// </summary>
             Nil,
-
-            /// <summary>
-            /// Represents a boolean value in the Topiary framework.
-            /// </summary>
             Bool,
-
-            /// <summary>
-            /// Represents a numeric value in the TopiValue enum.
-            /// </summary>
             Number,
-
-            /// <summary>
-            /// Represents a string value in the <see cref="TopiValue"/> enum.
-            /// </summary>
             String,
-
-            /// <summary>
-            /// Represents the different tags for the TopiValue enum.
-            /// </summary>
             List,
-
-            /// <summary>
-            /// Represents a member of the enum Tag that signifies a Set type.
-            /// </summary>
             Set,
-
-            /// <summary>
-            /// Represents a member of the enum Tag with the value Map.
-            /// </summary>
             Map,
-
-            /// <summary>
-            /// Represents a member of the enum Tag with the value Enum.
-            /// </summary>
-            Enum,
+            Enum
         }
 
 
@@ -132,7 +97,7 @@ namespace PeartreeGames.Topiary.Unity
             : throw new InvalidOperationException($"Value {tag} cannot be used as float");
 
         public string String => tag == Tag.String
-            ? Library.PtrToUtf8String(_data.stringValue)
+            ? _data.stringValue.Value
             : throw new InvalidOperationException($"Value {tag} cannot be used as string");
 
         public TopiValue[] List => tag == Tag.List
@@ -156,7 +121,7 @@ namespace PeartreeGames.Topiary.Unity
         {
             Tag.Bool => _data.boolValue == 1,
             Tag.Number => _data.numberValue,
-            Tag.String => Library.PtrToUtf8String(_data.stringValue),
+            Tag.String => _data.stringValue.Value,
             Tag.List => _data.listValue.List,
             Tag.Set => _data.listValue.Set,
             Tag.Map => _data.listValue.Map,
@@ -185,21 +150,13 @@ namespace PeartreeGames.Topiary.Unity
             {
                 Tag.Bool => _data.boolValue == 1 ? "True" : "False",
                 Tag.Number => _data.numberValue.ToString(CultureInfo.CurrentCulture),
-                Tag.String => Library.PtrToUtf8String(_data.stringValue),
+                Tag.String => _data.stringValue.Value,
                 Tag.List => $"List{{{string.Join(", ", _data.listValue.List)}}}",
                 Tag.Set => $"Set{{{string.Join(", ", _data.listValue.Set)}}}",
                 Tag.Map => $"Map{{{string.Join(", ", _data.listValue.Map)}}}",
                 Tag.Enum => $"{_data.enumValue.Name}.{_data.enumValue.Value}",
                 _ => $"{tag}: null"
             } ?? throw new InvalidOperationException();
-
-        /// <summary>
-        /// Releases the resources used by the TopiValue.
-        /// </summary>
-        public void Dispose()
-        {
-            Library.destroyValue(ref this);
-        }
 
         /// <summary>
         /// Determines whether the current instance is equal to the specified object.
@@ -216,7 +173,7 @@ namespace PeartreeGames.Topiary.Unity
                 case Tag.Number:
                     return Math.Abs(_data.numberValue - other._data.numberValue) < 0.0001f;
                 case Tag.String:
-                    return _data.stringValue == other._data.stringValue;
+                    return _data.stringValue.Value == other._data.stringValue.Value;
                 case Tag.List:
                 case Tag.Set:
                 case Tag.Map:
@@ -285,13 +242,13 @@ namespace PeartreeGames.Topiary.Unity
     [StructLayout(LayoutKind.Explicit)]
     internal struct TopiValueData
     {
-        [FieldOffset(0)] [MarshalAs(UnmanagedType.I1)]
+        [FieldOffset(0)]
         public byte boolValue;
 
-        [FieldOffset(0)] [MarshalAs(UnmanagedType.R4)]
+        [FieldOffset(0)]
         public float numberValue;
 
-        [FieldOffset(0)] public IntPtr stringValue;
+        [FieldOffset(0)] public StringBuffer stringValue;
 
         [FieldOffset(0)] public TopiList listValue;
 
@@ -299,22 +256,55 @@ namespace PeartreeGames.Topiary.Unity
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct TopiEnum
+    public readonly struct StringBuffer
     {
-        internal IntPtr namePtr;
-        internal IntPtr valuePtr;
-        public string Name => Library.PtrToUtf8String(namePtr);
-        public string Value => Library.PtrToUtf8String(valuePtr);
+        private readonly IntPtr strPtr;
+        private readonly UIntPtr strLen;
+
+        public StringBuffer(string value)
+        {
+            strPtr = Marshal.StringToHGlobalAnsi(value);
+            strLen = (UIntPtr)value.Length;
+        }
+
+        public string Value => Marshal.PtrToStringAnsi(strPtr, (int)strLen);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public readonly struct TopiEnum
+    {
+        private readonly StringBuffer name;
+        private readonly StringBuffer value;
+        public string Name => name.Value;
+        public string Value => value.Value;
+
+        public TopiEnum(string enumName, string enumValue)
+        {
+            name = new StringBuffer(enumName);
+            value = new StringBuffer(enumValue);
+        }
 
         public override int GetHashCode() => Name.GetHashCode() + Value.GetHashCode();
     }
 
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct TopiList
+    internal readonly struct TopiList
     {
-        internal IntPtr listPtr;
-        [MarshalAs(UnmanagedType.U2)] public short count;
+        private readonly IntPtr listPtr;
+        private readonly ushort count;
+
+        public TopiList(TopiValue[] list)
+        {
+            count = (ushort)list.Length;
+            var size = Marshal.SizeOf(typeof(TopiValue)) * count;
+            listPtr = Marshal.AllocHGlobal(size);
+            for (var i = 0; i < count; i++)
+            {
+                var itemPtr = new IntPtr(listPtr.ToInt64() + i * size);
+                Marshal.StructureToPtr(list[i], itemPtr, false);
+            }
+        }
 
         internal TopiValue[] List
         {
@@ -329,6 +319,20 @@ namespace PeartreeGames.Topiary.Unity
                 }
 
                 return value;
+            }
+        }
+
+        public TopiList(HashSet<TopiValue> set)
+        {
+            count = (ushort)set.Count;
+            var size = Marshal.SizeOf(typeof(TopiValue)) * count;
+            listPtr = Marshal.AllocHGlobal(size);
+            var i = 0;
+            foreach (var item in set)
+            {
+                var itemPtr = new IntPtr(listPtr.ToInt64() + i * size);
+                i++;
+                Marshal.StructureToPtr(item, itemPtr, false);
             }
         }
 
@@ -348,6 +352,22 @@ namespace PeartreeGames.Topiary.Unity
             }
         }
 
+        public TopiList(Dictionary<TopiValue, TopiValue> map)
+        {
+            count = (ushort)(map.Count * 2);
+            var size = Marshal.SizeOf(typeof(TopiValue)) * count;
+            listPtr = Marshal.AllocHGlobal(size);
+            var i = 0;
+            foreach (var kvp in map)
+            {
+                var itemPtr = new IntPtr(listPtr.ToInt64() + i * size);
+                i++;
+                var valuePtr = new IntPtr(listPtr.ToInt64() + i * size);
+                i++;
+                Marshal.StructureToPtr(kvp.Key, itemPtr, false);
+                Marshal.StructureToPtr(kvp.Value, valuePtr, false);
+            }
+        }
         internal Dictionary<TopiValue, TopiValue> Map
         {
             get

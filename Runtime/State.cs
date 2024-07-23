@@ -1,5 +1,6 @@
 using Newtonsoft.Json.Linq;
 using Sirenix.OdinInspector;
+using UnityEngine;
 
 namespace PeartreeGames.Topiary.Unity
 {
@@ -7,11 +8,7 @@ namespace PeartreeGames.Topiary.Unity
     {
         private JObject _rootState;
         [ShowInInspector]
-        public string Value
-        {
-            get => _rootState?.ToString();
-            set => _rootState = new JObject(value);
-        }
+        public string Value => _rootState?.ToString();
 
         /// <summary>
         /// Add current JSON values to the State
@@ -19,6 +16,7 @@ namespace PeartreeGames.Topiary.Unity
         /// <param name="jsonString"></param>
         public void Amend(string jsonString)
         {
+            Debug.Log($"jsonString: {jsonString}");
             if (_rootState == null) _rootState = JObject.Parse(jsonString);
             else
             {

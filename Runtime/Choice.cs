@@ -9,8 +9,7 @@ namespace PeartreeGames.Topiary.Unity
     [StructLayout(LayoutKind.Sequential)]
     public readonly struct Choice
     {
-        private readonly IntPtr _contentPtr;
-        [MarshalAs(UnmanagedType.U4)] private readonly int _contentLen;
+        private readonly StringBuffer _content;
         private readonly IntPtr _tagsPtr;
         private readonly byte _tagsLen;
 
@@ -32,7 +31,7 @@ namespace PeartreeGames.Topiary.Unity
         /// <summary>
         /// Represents a choice in a dialogue.
         /// </summary>
-        public string Content => Library.PtrToUtf8String(_contentPtr);
+        public string Content => _content.Value;
 
         /// <summary>
         /// Gets the tags associated with the choice.
@@ -53,7 +52,7 @@ namespace PeartreeGames.Topiary.Unity
                 for (var i = 0; i < _tagsLen; i++)
                 {
                     var ptr = Marshal.ReadIntPtr(_tagsPtr, offset);
-                    result[i] = Library.PtrToUtf8String(ptr);
+                    result[i] = Marshal.PtrToStructure<StringBuffer>(ptr).Value;
                     offset += IntPtr.Size;
                 }
 

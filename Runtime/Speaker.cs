@@ -1,17 +1,15 @@
-﻿using System;
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.Events;
 
 namespace PeartreeGames.Topiary.Unity
 {
-    public class TopiSpeaker : MonoBehaviour
+    public class Speaker : MonoBehaviour
     {
-        [SerializeField] private new string name;
-        [SerializeField] private UnityEvent<TopiSpeaker> onStartSpeaking;
-        [SerializeField] private UnityEvent<TopiSpeaker> onStopSpeaking;
-        public string Name => name;
-        public UnityEvent<TopiSpeaker> OnStartSpeaking => onStartSpeaking;
-        public UnityEvent<TopiSpeaker> OnStopSpeaking => onStopSpeaking;
+        [field: SerializeField, Tooltip("The name your wrote in the topi file")] public string Id { get; private set; }
+        [SerializeField] private UnityEvent<Speaker> onStartSpeaking;
+        [SerializeField] private UnityEvent<Speaker> onStopSpeaking;
+        public UnityEvent<Speaker> OnStartSpeaking => onStartSpeaking;
+        public UnityEvent<Speaker> OnStopSpeaking => onStopSpeaking;
         
         protected void Awake()
         {

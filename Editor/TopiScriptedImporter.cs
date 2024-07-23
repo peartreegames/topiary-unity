@@ -13,6 +13,7 @@ namespace PeartreeGames.Topiary.Unity.Editor
     [ScriptedImporter(1, "topi")]
     public class TopiScriptedImporter : ScriptedImporter
     {
+        [SerializeField] private Library.Severity severity = Library.Severity.Error;
         public override void OnImportAsset(AssetImportContext ctx)
         {
             using var streamReader = new StreamReader(ctx.assetPath, Encoding.UTF8);
@@ -29,14 +30,14 @@ namespace PeartreeGames.Topiary.Unity.Editor
             }
             
             var log = Logger(ctx);
+            var logPtr =  Marshal.GetFunctionPointerForDelegate(log);
             Object asset;
             try
             {
-                Library.setDebugLog(Marshal.GetFunctionPointerForDelegate(log));
                 var absPath = Application.dataPath + ctx.assetPath[6..];
-                var size = Library.calculateCompileSize(absPath, absPath.Length);
+                var size = Library.calculateCompileSize(absPath, logPtr, severity);
                 var output = new byte[size];
-                _ = Library.compile(absPath, absPath.Length, output, size);
+                _ = Library.compile(absPath, output, size, logPtr, severity);
                 
                 using var memStream = new MemoryStream(output);
                 using var reader = new BinaryReader(memStream);
@@ -88,10 +89,10 @@ namespace PeartreeGames.Topiary.Unity.Editor
             }
         }
 
-        private static Library.OutputLogDelegate Logger(AssetImportContext ctx) =>
-            (intPtr, severity) =>
+        private static Delegates.OutputLogDelegate Logger(AssetImportContext ctx) =>
+            (str, severity) =>
             {
-                var msg = Library.PtrToUtf8String(intPtr);
+                var msg = str.Value;
                 switch (severity)
                 {
                     case Library.Severity.Debug:

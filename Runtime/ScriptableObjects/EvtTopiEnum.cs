@@ -6,34 +6,34 @@ namespace PeartreeGames.Topiary.Unity
     [CreateAssetMenu(fileName = "enum_", menuName = "Evt/Topiary/Enum", order = 0)]
     public class EvtTopiEnum : EvtTopiVariable<string>
     {
-        [SerializeField] private TopiEnumReference topiEnum;
+        [SerializeField] private EnumReference @enum;
 
-        public TopiEnumReference Enum => topiEnum;
+        public EnumReference Enum => @enum;
         
         public override string Value
         {
             get => EvtT.Value;
             set
             {
-                topiEnum.Value = value;
+                @enum.Value = value;
                 if (EvtT == null) return;
-                var current = Array.FindIndex(topiEnum.Values, v => v == EvtT.Value);
-                var next = Array.FindIndex(topiEnum.Values, v => v == value);
-                if (topiEnum.IsSequence && current > next) return;
+                var current = Array.FindIndex(@enum.Values, v => v == EvtT.Value);
+                var next = Array.FindIndex(@enum.Values, v => v == value);
+                if (@enum.IsSequence && current > next) return;
                 if (IsEqual(EvtT.Value, value)) return;
                 EvtT.Value = value;
             }
         }
 
-        public void Set(TopiEnumReference reference)
+        public void Set(EnumReference reference)
         {
-            topiEnum = reference;
+            @enum = reference;
             Value = reference.Value;
         }
 
         private void OnEnable()
         {
-            Debug.Assert(topiEnum != null, "topiEnum != null", this); 
+            Debug.Assert(@enum != null, "topiEnum != null", this); 
         }
     }
 }
