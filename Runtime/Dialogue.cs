@@ -339,37 +339,36 @@ namespace PeartreeGames.Topiary.Unity
                 {
                     case EvtTopiBool b:
                         topiName = b.Name;
-                        Set(topiName, new TopiValue(b));
+                        Set(topiName, new TopiValue(b.Value));
                         Callbacks[topiName] =
                             new Action<bool>(v => Set(topiName, new TopiValue(v)));
                         b.OnEvt += (Action<bool>)Callbacks[topiName];
                         break;
                     case EvtTopiFloat f:
                         topiName = f.Name;
-                        Set(topiName, new TopiValue(f));
+                        Set(topiName, new TopiValue(f.Value));
                         Callbacks[topiName] =
                             new Action<float>(v => Set(topiName, new TopiValue(v)));
                         f.OnEvt += (Action<float>)Callbacks[topiName];
                         break;
                     case EvtTopiInt i:
                         topiName = i.Name;
-                        Set(topiName, new TopiValue(i));
+                        Set(topiName, new TopiValue(i.Value));
                         Callbacks[topiName] = new Action<int>(v => Set(topiName, new TopiValue(v)));
                         i.OnEvt += (Action<int>)Callbacks[topiName];
                         break;
                     case EvtTopiString s:
                         topiName = s.Name;
-                        Set(topiName, new TopiValue(s));
+                        Set(topiName, new TopiValue(s.Value));
                         Callbacks[topiName] =
                             new Action<string>(v => Set(topiName, new TopiValue(v)));
                         s.OnEvt += (Action<string>)Callbacks[topiName];
                         break;
                     case EvtTopiEnum e:
                         topiName = e.Name;
-                        Debug.Log($"Setting {topiName} to {e.Name}.{e.Value}");
-                        Set(topiName, new TopiValue(e.Name, e.Value));
+                        Set(topiName, new TopiValue(e.Enum.Name, e.Value));
                         Callbacks[topiName] =
-                            new Action<string>(v => Set(topiName, new TopiValue(e.Name, v)));
+                            new Action<string>(v => Set(topiName, new TopiValue(e.Enum.Name, v)));
                         e.OnEvt += (Action<string>)Callbacks[topiName];
                         break;
                 }

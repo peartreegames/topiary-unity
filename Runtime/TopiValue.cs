@@ -261,12 +261,14 @@ namespace PeartreeGames.Topiary.Unity
         private readonly IntPtr strPtr;
         private readonly UIntPtr strLen;
 
+
         public StringBuffer(string value)
         {
             strPtr = Marshal.StringToHGlobalAnsi(value);
             strLen = (UIntPtr)value.Length;
         }
 
+        public int Length => (int)strLen;
         public string Value => Marshal.PtrToStringAnsi(strPtr, (int)strLen);
     }
 

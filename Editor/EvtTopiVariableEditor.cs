@@ -41,7 +41,7 @@ namespace PeartreeGames.Topiary.Unity.Editor
             elem.Add(field);
             if (target is EvtTopiEnum)
             {
-                var enumProp = serializedObject.FindProperty("topiEnum");
+                var enumProp = serializedObject.FindProperty("enum");
                 var enumField = new PropertyField(enumProp);
                 elem.Add(enumField);
                 elem.Remove(elem.Q<PropertyField>("value"));

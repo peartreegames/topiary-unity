@@ -34,7 +34,7 @@ namespace PeartreeGames.Topiary.Unity.Editor
             Object asset;
             try
             {
-                var absPath = Application.dataPath + ctx.assetPath[6..];
+                var absPath = Application.dataPath[..^6] + ctx.assetPath;
                 var size = Library.calculateCompileSize(absPath, logPtr, severity);
                 var output = new byte[size];
                 _ = Library.compile(absPath, output, size, logPtr, severity);

@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using UnityEngine;
 using IntPtr = System.IntPtr;
 
 namespace PeartreeGames.Topiary.Unity
@@ -37,9 +38,9 @@ namespace PeartreeGames.Topiary.Unity
                 var tags = new string[_tagsLen];
                 for (var i = 0; i < _tagsLen; i++)
                 {
-                    var ptr = Marshal.ReadIntPtr(_tagsPtr, offset);
-                    tags[i] = Marshal.PtrToStructure<StringBuffer>(ptr).Value;
-                    offset += IntPtr.Size;
+                    var str = Marshal.PtrToStructure<StringBuffer>(_tagsPtr + offset);
+                    tags[i] = str.Value;
+                    offset += Marshal.SizeOf<StringBuffer>();
                 }
                 return tags;
             }
