@@ -17,7 +17,7 @@ namespace PeartreeGames.Topiary.Unity.Editor
             var enumObjField = new PropertyField(enumObjectProperty);
             var dropdownField = new PopupField<string>("Value", new List<string>(), 0);
 
-            enumObjField.RegisterCallback<ChangeEvent<Object>>(evt =>
+            enumObjField.RegisterCallback<ChangeEvent<Object>>(_ =>
             {
                 var enumObject = enumObjectProperty.objectReferenceValue as EnumObject;
                 if (enumObject == null) return;

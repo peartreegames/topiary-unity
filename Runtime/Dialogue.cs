@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using AOT;
 using PeartreeGames.Evt.Variables;
-using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
@@ -32,10 +31,10 @@ namespace PeartreeGames.Topiary.Unity
         public static event Action<Dialogue, Choice[]> OnChoices;
         public static event Action<Dialogue, string, TopiValue> OnValueChanged;
 
-        [ShowInInspector]
         public static readonly State State = new();
         public static readonly Dictionary<string, Speaker> Speakers = new();
         public static readonly Dictionary<IntPtr, Dialogue> Dialogues = new();
+        
         private static readonly Dictionary<string, EvtVariable> Variables = new();
         private static readonly Dictionary<string, Delegate> Callbacks = new();
         private static readonly List<TopiAttribute.FuncPtr> FunctionPtrs = new();

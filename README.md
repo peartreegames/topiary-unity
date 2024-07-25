@@ -10,7 +10,7 @@ Can be installed via the Package Manager > Add Package From Git URL...
 
 This repo has a dependency on the EvtVariable package which MUST be installed first. (From my understanding Unity does not allow git urls to be used as dependencies of packages) https://github.com/peartreegames/evt-variables.git
 
-This package also depends on the Unity Addressables package, which should automatically be installed, but if you any issues please install it manually from the Package Manager.
+This package also depends on the Unity Addressables package, which should automatically be installed, but if you have any issues please install it manually from the Package Manager.
 
 then the repo can be added
 
@@ -153,7 +153,7 @@ value.Bool // true
 
 ## EvtVariables
 
-I've made [EvtVariables](https://github.com/peartreegames/evt-variables), a scriptableobject event system architecture, a dependency of this package.
+I've made [EvtVariables](https://github.com/peartreegames/evt-variables), a ScriptableObject event system architecture, a dependency of this package.
 Though it isn't actually necessary, a lot of my tools use it. 
 If you prefer not to keep it, please feel free to fork this repo and remove it.
 

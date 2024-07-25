@@ -1,7 +1,5 @@
 using System;
 using System.Runtime.InteropServices;
-using UnityEngine;
-using IntPtr = System.IntPtr;
 
 namespace PeartreeGames.Topiary.Unity
 {

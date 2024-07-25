@@ -19,9 +19,9 @@ namespace PeartreeGames.Topiary.Unity
         /// <summary>
         /// Gets or sets the name of the function in the topi file.
         /// </summary>
-        public string Name { get; private set; }
+        public string Name { get; }
 
-        public byte Arity { get; private set; }
+        public byte Arity { get; }
 
         /// <summary>
         /// Declare the function as an extern topi function
