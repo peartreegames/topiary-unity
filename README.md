@@ -73,9 +73,9 @@ Any `.topi` file will automatically be compiled and converted into a `.topi.byte
 
 Once your file is compiled it will automatically be added to a Topiary Addressables group with the labels `Topiary` and `Topi`.
 
-Add a `Dialogue` MonoBehaviour to a GameObject and select the `.topi` file you want to associate with that Conversation.
+Add a `Dialogue` MonoBehaviour to a GameObject and select the `.topi` file you want to associate with that Dialogue. 
 
-Trigger the start of the Conversation in any way you like with `conversation.PlayDialogue()` or `StartCoroutine(conversation.Play())`
+Trigger the start of the Dialogue in any way you like with `dialogue.PlayDialogue()` or `StartCoroutine(dialogue.Play())`
 
 ## Functions
 
@@ -106,7 +106,7 @@ public static class DialogueFunctions
         var args = TopiValue.CreateArgs(argsPtr, count);
         var speakerName = args[0];
         var animClip = args[1];
-        if (!Conversation.Speakers.TryGetValue(speakerName.String, out var topi)) return default;
+        if (!Dialogue.Speakers.TryGetValue(speakerName.String, out var topi)) return default;
         // get Animator component and play clip
         return default;
     }
