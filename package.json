@@ -1,6 +1,6 @@
 {
   "name": "games.peartree.topiary.unity",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "displayName": "Topiary.Unity",
   "description": "Topiary Dialogue Runner for Unity",
   "unity": "2022.3",
