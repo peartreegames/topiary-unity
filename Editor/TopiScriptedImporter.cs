@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using UnityEditor;
@@ -29,7 +30,7 @@ namespace PeartreeGames.Topiary.Unity.Editor
                 return;
             }
             
-            var log = Logger(ctx);
+            var log = Logger(ctx, severity);
             var logPtr =  Marshal.GetFunctionPointerForDelegate(log);
             Object asset;
             try
@@ -38,7 +39,7 @@ namespace PeartreeGames.Topiary.Unity.Editor
                 var size = Library.calculateCompileSize(absPath, logPtr, severity);
                 var output = new byte[size];
                 _ = Library.compile(absPath, output, size, logPtr, severity);
-                
+                 
                 using var memStream = new MemoryStream(output);
                 using var reader = new BinaryReader(memStream);
                 var boughs = ByteData.GetBoughs(reader);
@@ -56,7 +57,7 @@ namespace PeartreeGames.Topiary.Unity.Editor
                 ((ByteData)asset).bytes = output;
 
                 reader.BaseStream.Position = 0;
-                ((ByteData)asset).ExternsSet = ByteData.GetExterns(reader);
+                ((ByteData)asset).SetExterns(reader);
                 ctx.AddObjectToAsset("main", asset, byteIcon);
                 ctx.SetMainObject(asset);
                 
@@ -76,38 +77,33 @@ namespace PeartreeGames.Topiary.Unity.Editor
                 addressable.SetLabel("Topi", true);
                 EditorUtility.SetDirty(settings);
             }
-            catch (EndOfStreamException)
+            catch (EndOfStreamException e)
             {
+                Debug.LogError(e.Message);
                 asset = new TextAsset(text);
                 icon = Resources.Load<Texture2D>("error");
                 ctx.AddObjectToAsset("main", asset, icon);
                 ctx.SetMainObject(asset);
             }
-            catch (Exception e)
-            {
-                Debug.LogError(e);
-            }
         }
 
-        private static Delegates.OutputLogDelegate Logger(AssetImportContext ctx) =>
+        private static Delegates.OutputLogDelegate Logger(AssetImportContext ctx,
+            Library.Severity ctxSeverity) =>
             (str, severity) =>
             {
                 var msg = str.Value;
                 switch (severity)
                 {
-                    case Library.Severity.Debug:
-                        break;
-                    case Library.Severity.Info:
+                    case Library.Severity.Debug when ctxSeverity <= Library.Severity.Debug:
+                    case Library.Severity.Info when ctxSeverity >= Library.Severity.Info:
                         Debug.Log(msg);
                         break;
-                    case Library.Severity.Warn:
+                    case Library.Severity.Warn when ctxSeverity >= Library.Severity.Warn:
                         ctx.LogImportWarning(msg);
                         break;
                     case Library.Severity.Error:
                         ctx.LogImportError(msg);
                         break;
-                    default:
-                        throw new ArgumentOutOfRangeException(nameof(severity), severity, null);
                 }
             };
     }

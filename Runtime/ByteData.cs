@@ -22,58 +22,48 @@ namespace PeartreeGames.Topiary.Unity
         /// </summary>
         [SerializeField] private string[] externs;
 
-        public SortedSet<string> ExternsSet;
-        public void OnBeforeSerialize() => externs = ExternsSet?.ToArray();
+        public SortedSet<string> Externs { get; private set; }
+        public void OnBeforeSerialize() => externs = Externs?.ToArray();
 
-        public void OnAfterDeserialize() => ExternsSet = new SortedSet<string>(externs);
+        public void OnAfterDeserialize() => Externs = new SortedSet<string>(externs);
 
         /// <summary>
-        /// Retrieves a sorted set of external names from the given binary reader.
+        /// Retrieves a sorted set of extern names from the given binary reader.
         /// </summary>
-        /// <param name="reader">The binary reader from which to read the external names.</param>
-        /// <returns>A sorted set of external names.</returns>
-        public static SortedSet<string> GetExterns(BinaryReader reader)
+        /// <param name="reader">The binary reader from which to read the extern names.</param>
+        public void SetExterns(BinaryReader reader)
         {
-            var globalSymbolsCount = reader.ReadUInt64();
-            var result = new SortedSet<string>();
-            var indexSize = Marshal.SizeOf<uint>();
-            for (ulong i = 0; i < globalSymbolsCount; i++)
+            var globalsStart= reader.ReadUInt64();
+            reader.BaseStream.Position = (long)globalsStart;
+            var globalsCount = reader.ReadUInt64();
+            Externs = new SortedSet<string>();
+            for (ulong i = 0; i < globalsCount; i++)
             {
                 var nameLength = reader.ReadByte();
-                var name = Encoding.UTF8.GetString(reader.ReadBytes(nameLength));
-                reader.ReadBytes(indexSize); // skip globals index
+                var nameValue = Encoding.UTF8.GetString(reader.ReadBytes(nameLength));
+                reader.ReadUInt32(); // skip globals index
                 var isExtern = reader.ReadByte() == 1;
-                _ = reader.ReadByte() == 1; // mutable
-                if (isExtern) result.Add(name);
+                reader.ReadByte(); // skip mutable
+                if (isExtern) Externs.Add(nameValue);
             }
-
-            return result;
         }
 
         public static string[] GetBoughs(BinaryReader reader)
         {
-            var globalSymbolsCount = reader.ReadUInt64();
-            var indexSize = Marshal.SizeOf<uint>();
-
-            for (ulong i = 0; i < globalSymbolsCount; i++)
-            {
-                var nameLength = reader.ReadByte();
-                reader.ReadBytes(nameLength); // skip name
-                reader.ReadBytes(indexSize); // skip globals index
-                reader.ReadByte();
-                reader.ReadByte(); // mutable
-            }
-
+            reader.ReadUInt64(); // skip globals
+            var boughsPos = reader.ReadUInt64();
+            reader.BaseStream.Position = (long)boughsPos;
+            
             var boughCount = reader.ReadUInt64();
             var result = new string[boughCount];
             for (ulong i = 0; i < boughCount; i++)
             {
-                var nameLength = reader.ReadByte();
+                var nameLength = reader.ReadUInt16();
                 var name = Encoding.UTF8.GetString(reader.ReadBytes(nameLength));
-                reader.ReadBytes(indexSize); // skip index
+                reader.ReadUInt32(); // skip index
                 result[i] = name;
             }
-
+            
             return result;
         }
     }

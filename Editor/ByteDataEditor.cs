@@ -11,14 +11,14 @@ namespace PeartreeGames.Topiary.Unity.Editor
     {
         private ByteData _byteData;
         private SerializedProperty _externsProperty;
-        private string text;
+        private string _text;
 
         private void OnEnable()
         {
             _byteData = (ByteData) target;
             _externsProperty = serializedObject.FindProperty("externs");
             using var streamReader = new StreamReader(AssetDatabase.GetAssetPath(target), Encoding.UTF8);
-            text = streamReader.ReadToEnd();
+            _text = streamReader.ReadToEnd();
         }
 
         public override VisualElement CreateInspectorGUI()
@@ -35,7 +35,7 @@ namespace PeartreeGames.Topiary.Unity.Editor
             var textField = new TextField
             {
                 isReadOnly = true,
-                value = text
+                value = _text
             };
             elem.Add(textField);
             

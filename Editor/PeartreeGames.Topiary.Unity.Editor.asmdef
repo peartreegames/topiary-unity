@@ -3,8 +3,6 @@
     "rootNamespace": "PeartreeGames.Topiary.Unity.Editor",
     "references": [
         "PeartreeGames.Topiary.Unity",
-        "PeartreeGames.Evt.Variables",
-        "PeartreeGames.Evt.Variables.Editor",
         "Unity.Addressables.Editor"
     ],
     "includePlatforms": [

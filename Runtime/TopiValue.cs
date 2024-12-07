@@ -256,7 +256,7 @@ namespace PeartreeGames.Topiary.Unity
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public readonly struct StringBuffer
+    public readonly struct StringBuffer : IEquatable<StringBuffer>
     {
         private readonly IntPtr strPtr;
         private readonly UIntPtr strLen;
@@ -270,10 +270,25 @@ namespace PeartreeGames.Topiary.Unity
 
         public int Length => (int)strLen;
         public string Value => Marshal.PtrToStringAnsi(strPtr, (int)strLen);
+
+        public bool Equals(StringBuffer other)
+        {
+            return strPtr.Equals(other.strPtr) && strLen.Equals(other.strLen);
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is StringBuffer other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(strPtr, strLen);
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public readonly struct TopiEnum
+    public readonly struct TopiEnum : IEquatable<TopiEnum>
     {
         private readonly StringBuffer name;
         private readonly StringBuffer value;
@@ -287,11 +302,21 @@ namespace PeartreeGames.Topiary.Unity
         }
 
         public override int GetHashCode() => Name.GetHashCode() + Value.GetHashCode();
+
+        public bool Equals(TopiEnum other)
+        {
+            return name.Equals(other.name) && value.Equals(other.value);
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is TopiEnum other && Equals(other);
+        }
     }
 
 
     [StructLayout(LayoutKind.Sequential)]
-    internal readonly struct TopiList
+    internal readonly struct TopiList : IEquatable<TopiList>
     {
         private readonly IntPtr listPtr;
         private readonly ushort count;
@@ -387,6 +412,21 @@ namespace PeartreeGames.Topiary.Unity
 
                 return map;
             }
+        }
+
+        public bool Equals(TopiList other)
+        {
+            return listPtr.Equals(other.listPtr) && count == other.count;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is TopiList other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(listPtr, count);
         }
     }
 }

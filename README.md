@@ -14,7 +14,7 @@ This package also depends on the Unity Addressables package, which should automa
 
 then the repo can be added
 
-https://github.com/peartreegames/topiary-unity.git
+`https://github.com/peartreegames/topiary-unity.git`
 
 ## Setup
 
@@ -93,14 +93,15 @@ Here's some examples:
 ```csharp
 public static class DialogueFunctions
 {
-    // playAnim will be replaced with the C# method
-    // we give the playAnim function a body in our .topi file for testing
-    // a warning will be shown if any extern isn't set when we start our Dialogue
+    // playAnim will be replaced with the C# method.
+    // We give the playAnim function a body in our .topi file for testing.
+    // A warning will be shown if any extern isn't set when we start our Dialogue.
+    // Preserve is used if code stripping is enabled
     // ex .topi file:
     //      extern const playAnim = |name, clip| {}
     //      playAnim("Player", "Laugh")
     [Topi("playAnim", 2)]
-    [MonoPInvokeCallback(typeof(Delegates.ExternFunctionDelegate))]
+    [MonoPInvokeCallback(typeof(Delegates.ExternFunctionDelegate)), Preserve]
     public static TopiValue PlayAnim(IntPtr argsPtr, byte count)
     {
         var args = TopiValue.CreateArgs(argsPtr, count);
@@ -118,7 +119,8 @@ public static class DialogueFunctions
 I wanted to hide away the [TopiValue](https://github.com/peartreegames/topiary-unity/blob/main/Runtime/TopiValue.cs) implementation details, 
 but without boxing everything to just `object` it didn't seem viable.
 
-So instead here's your warning: TopiValues have data that are explicitly mapped out in memory and different fields are overlaying each other.
+So instead here's your warning: TopiValues have data that are explicitly mapped out in memory 
+and different fields are overlaying each other.
 
 ```csharp
     [StructLayout(LayoutKind.Sequential)]
@@ -153,15 +155,5 @@ value.Bool // true
 
 ## EvtVariables
 
-I've made [EvtVariables](https://github.com/peartreegames/evt-variables), a ScriptableObject event system architecture, a dependency of this package.
-Though it isn't actually necessary, a lot of my tools use it. 
-If you prefer not to keep it, please feel free to fork this repo and remove it.
-
-EvtVariables are extended as EvtTopiVariables and used as runtime variable containers for any .topi `extern` variable.
-
-Create one with `ContextMenu > Create > Evt > Topiary > [Type]`
-
-Then set the `Topi Variable Name` to the name in the .topi file.
-
-Topiary.Unity will automatically add the object to the Addressables `Topiary` group with labels `Topiary` and `Evt`.
-Then each Dialogue will automatically load the EvtVariables and hook up callbacks with the Topiary VM.
+I've made [EvtTopiary](https://github.com/peartreegames/evt-topiary), a ScriptableObject event system architecture, an optional add-on.
+You can also use the repo as an example of how you might want to connect Topiary variables to your own systems.
