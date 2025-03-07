@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
 using AOT;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -26,8 +25,7 @@ namespace PeartreeGames.Topiary.Unity
         private IntPtr _vmPtr;
         public string[] Tags => tags;
 
-        public static event Action<Dialogue> OnStart;
-        public static event Func<Dialogue, Task> OnStartBlocking;
+        public static event Func<Dialogue, IEnumerator> OnStart;
         public static event Action<Dialogue> OnEnd;
         public static event Action<Dialogue, Line, Speaker> OnLine;
         public static event Action<Dialogue, Choice[]> OnChoices;
@@ -91,7 +89,7 @@ namespace PeartreeGames.Topiary.Unity
             Release();
             if (data == null)
             {
-                Log($"No file set: {gameObject}", Library.Severity.Error);
+                Log($"No file set: {gameObject}", Library.Severity.Warn);
                 yield break;
             }
 
@@ -161,19 +159,19 @@ namespace PeartreeGames.Topiary.Unity
             LoadFunctions();
             yield return null;
 
-            if (OnStartBlocking != null)
+            if (OnStart != null)
             {
-                var dels = OnStartBlocking.GetInvocationList();
-                var tasks = new Task[dels.Length];
+                var dels = OnStart.GetInvocationList();
+                var coroutines = new Coroutine[dels.Length];
                 for (var i = 0; i < dels.Length; i++)
                 {
-                    var handler = (Func<Dialogue, Task>)dels[i];
-                    tasks[i] = handler(this);
+                    var handler = (Func<Dialogue, IEnumerator>)dels[i];
+                    coroutines[i] = StartCoroutine(handler(this));
                 }
-                yield return new WaitUntil(() => Task.WhenAll(tasks).IsCompleted);
+
+                foreach (var co in coroutines) yield return co;
             }
             
-            OnStart?.Invoke(this);
             Library.start(_vmPtr, bough);
             while (Library.canContinue(_vmPtr))
             {
@@ -193,7 +191,6 @@ namespace PeartreeGames.Topiary.Unity
                 }
 
                 while (Library.isWaiting(_vmPtr)) yield return null;
-                Debug.Log("Dialogue Next");
             }
 
             End();
