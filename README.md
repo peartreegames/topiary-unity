@@ -8,7 +8,8 @@ Checkout the [syntax](https://peartree.games/topiary/docs/syntax) file if you're
 
 Can be installed via the Package Manager > Add Package From Git URL...
 
-This repo has a dependency on the EvtVariable package which MUST be installed first. (From my understanding Unity does not allow git urls to be used as dependencies of packages) https://github.com/peartreegames/evt-variables.git
+This repo has an optional dependency on the EvtVariable package which can be installed. 
+`https://github.com/peartreegames/evt-variables.git`
 
 This package also depends on the Unity Addressables package, which should automatically be installed, but if you have any issues please install it manually from the Package Manager.
 
