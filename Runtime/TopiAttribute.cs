@@ -44,7 +44,7 @@ namespace PeartreeGames.Topiary.Unity
     
         public static List<FuncPtr> GetAllTopiMethodPtrs()
         {
-            var assemblyRegex = new Regex("^(System|Microsoft|mscorlib)", RegexOptions.Compiled);
+            var assemblyRegex = new Regex("^(System|Microsoft|mscorlib|JetBrains)", RegexOptions.Compiled);
 
             var assemblies = AppDomain.CurrentDomain.GetAssemblies()
                 .Where(a => !assemblyRegex.IsMatch(a.FullName));

@@ -207,9 +207,7 @@ namespace PeartreeGames.Topiary.Unity
                     Tag.Bool => _data.boolValue.GetHashCode(),
                     Tag.Number => _data.numberValue.GetHashCode(),
                     Tag.String => _data.stringValue.GetHashCode(),
-                    Tag.List => _data.listValue.GetHashCode(),
-                    Tag.Set => _data.listValue.GetHashCode(),
-                    Tag.Map => _data.listValue.GetHashCode(),
+                    Tag.List or Tag.Set or Tag.Map => _data.listValue.GetHashCode(),
                     Tag.Enum => _data.enumValue.GetHashCode(),
                     _ => -1
                 };

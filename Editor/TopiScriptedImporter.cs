@@ -37,27 +37,30 @@ namespace PeartreeGames.Topiary.Unity.Editor
             {
                 var absPath = Application.dataPath[..^6] + ctx.assetPath;
                 var size = Library.calculateCompileSize(absPath, logPtr, severity);
-                var output = new byte[size];
+                var output = new byte[(int)size];
                 _ = Library.compile(absPath, output, size, logPtr, severity);
                  
                 using var memStream = new MemoryStream(output);
                 using var reader = new BinaryReader(memStream);
-                var boughs = ByteData.GetBoughs(reader);
-                if (boughs.Length == 0)
+
+                var identifier = $"{fileName}.byte";
+                asset = ScriptableObject.CreateInstance<ByteData>();
+                asset.name = identifier;
+                var bytedata = (ByteData)asset;
+                bytedata.bytes = output;
+
+                reader.BaseStream.Position = 0;
+                bytedata.SetExterns(reader);
+                reader.BaseStream.Position = 0;
+                bytedata.SetBoughs(reader);
+                if (bytedata.Boughs.Count == 0)
                 {
                     var empty = new TextAsset(text);
                     ctx.AddObjectToAsset("main", empty, icon);
                     ctx.SetMainObject(empty);
                     return;
                 }
-
-                var identifier = $"{fileName}.byte";
-                asset = ScriptableObject.CreateInstance<ByteData>();
-                asset.name = identifier;
-                ((ByteData)asset).bytes = output;
-
-                reader.BaseStream.Position = 0;
-                ((ByteData)asset).SetExterns(reader);
+                
                 ctx.AddObjectToAsset("main", asset, byteIcon);
                 ctx.SetMainObject(asset);
                 

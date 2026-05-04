@@ -14,7 +14,9 @@ namespace PeartreeGames.Topiary.Unity
 {
     public class Dialogue : MonoBehaviour
     {
-        [SerializeField] private string bough;
+        [SerializeField, Tooltip("Default Starting Bough")]
+        private string bough;
+
         [SerializeField] private string[] tags;
         [SerializeField] private AssetReferenceT<ByteData> file;
         [SerializeField] private Library.Severity logs = Library.Severity.Error;
@@ -59,24 +61,36 @@ namespace PeartreeGames.Topiary.Unity
         }
 
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterAssembliesLoaded)]
         private static void Init()
         {
             State.Clear();
             Speakers.Clear();
             Dialogues.Clear();
             FunctionPtrs.Clear();
-            _onChoicesCallback ??= OnChoicesCallback;
-            _onLineCallback ??= OnLineCallback;
-            _onLogCallback ??= LogCallback;
-            _subscriberCallback ??= ValueChangedCallback;
-            _freeCallback ??= Free;
+
+            _onChoicesCallback = OnChoicesCallback;
+            _onLineCallback = OnLineCallback;
+            _onLogCallback = LogCallback;
+            _subscriberCallback = ValueChangedCallback;
+            _freeCallback = Free;
+
             _subscriberPtr = Marshal.GetFunctionPointerForDelegate(_subscriberCallback);
             _linePtr = Marshal.GetFunctionPointerForDelegate(_onLineCallback);
             _choicesPtr = Marshal.GetFunctionPointerForDelegate(_onChoicesCallback);
             _logPtr = Marshal.GetFunctionPointerForDelegate(_onLogCallback);
             _freePtr = Marshal.GetFunctionPointerForDelegate(_freeCallback);
+
             FunctionPtrs.AddRange(TopiAttribute.GetAllTopiMethodPtrs());
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void CleanupPointers()
+        {
+            foreach (var dialogue in new List<Dialogue>(Dialogues.Values))
+            {
+                if (dialogue != null) dialogue.Release();
+            }
         }
 
         private IEnumerator Start()
@@ -89,7 +103,7 @@ namespace PeartreeGames.Topiary.Unity
             Release();
             if (data == null)
             {
-                Log($"No file set: {gameObject}", Library.Severity.Warn);
+                Log($"{gameObject.name} no file set", Library.Severity.Warn);
                 yield break;
             }
 
@@ -98,7 +112,8 @@ namespace PeartreeGames.Topiary.Unity
             if (loc.Status != AsyncOperationStatus.Succeeded || loc.Result == null ||
                 loc.Result.Count == 0)
             {
-                Log($"No file set: {data}", Library.Severity.Error);
+                Log($"{gameObject.name} no file found for {data.RuntimeKey}",
+                    Library.Severity.Warn);
                 yield break;
             }
 
@@ -108,7 +123,7 @@ namespace PeartreeGames.Topiary.Unity
             Data = ao.Result;
             if (Data == null)
             {
-                Log($"ByteData could not be loaded: {data}",
+                Log($"{gameObject.name} ByteData could not be loaded",
                     Library.Severity.Error);
                 yield break;
             }
@@ -116,7 +131,7 @@ namespace PeartreeGames.Topiary.Unity
 
             _pinnedHandle = GCHandle.Alloc(Data.bytes, GCHandleType.Pinned);
             var sourcePtr = _pinnedHandle.AddrOfPinnedObject();
-            _vmPtr = Library.createVm(sourcePtr, Data.bytes.Length, _linePtr, _choicesPtr,
+            _vmPtr = Library.createVm(sourcePtr, (UIntPtr)Data.bytes.Length, _linePtr, _choicesPtr,
                 _subscriberPtr, _logPtr, logs);
             Dialogues.Add(_vmPtr, this);
         }
@@ -128,13 +143,16 @@ namespace PeartreeGames.Topiary.Unity
 
         private void Release()
         {
+            if (_vmPtr != IntPtr.Zero)
+            {
+                Dialogues.Remove(_vmPtr);
+                Library.destroyVm(_vmPtr);
+                _vmPtr = IntPtr.Zero;
+            }
+
+            // 3. NOW it is safe to unpin and release assets
             if (_pinnedHandle.IsAllocated) _pinnedHandle.Free();
             if (file.IsValid()) file.ReleaseAsset();
-
-            if (_vmPtr == IntPtr.Zero) return;
-            Dialogues.Remove(_vmPtr);
-            Library.destroyVm(_vmPtr);
-            _vmPtr = IntPtr.Zero;
         }
 
         public static void AddSpeaker(Speaker speaker) => Speakers[speaker.Id] = speaker;
@@ -147,12 +165,12 @@ namespace PeartreeGames.Topiary.Unity
 
         public void SelectChoice(int index)
         {
-            if (IsVmValid) Library.selectChoice(_vmPtr, index);
+            if (IsVmValid) Library.selectChoice(_vmPtr, (UIntPtr)index);
         }
 
-        public void PlayDialogue() => StartCoroutine(Play());
+        public void PlayDialogue(string start = null) => StartCoroutine(Play(start));
 
-        public IEnumerator Play()
+        public IEnumerator Play(string start = null)
         {
             if (!IsVmValid) yield break;
             SetState(State.Value);
@@ -171,8 +189,9 @@ namespace PeartreeGames.Topiary.Unity
 
                 foreach (var co in coroutines) yield return co;
             }
-            
-            Library.start(_vmPtr, bough);
+
+            var startingBough = string.IsNullOrEmpty(start) ? bough : start;
+            Library.start(_vmPtr, startingBough);
             while (Library.canContinue(_vmPtr))
             {
                 try
@@ -209,18 +228,15 @@ namespace PeartreeGames.Topiary.Unity
             if (_previousSpeaker != null) _previousSpeaker.StopSpeaking();
             _previousSpeaker = null;
             OnEnd?.Invoke(this);
-#if EVT_TOPIARY
-            _registrar.UnloadTopiValues();
-#endif
         }
 
         private string GetState()
         {
             if (!IsVmValid) return null;
             var capacity = Library.calculateStateSize(_vmPtr);
-            var output = new byte[capacity];
+            var output = new byte[(int)capacity];
             if (!IsVmValid) return null;
-            _ = Library.saveState(_vmPtr, output, output.Length);
+            _ = Library.saveState(_vmPtr, output, (UIntPtr)output.Length);
             return Encoding.UTF8.GetString(output);
         }
 
@@ -228,7 +244,7 @@ namespace PeartreeGames.Topiary.Unity
         {
             if (json != null && IsVmValid)
             {
-                Library.loadState(_vmPtr, json, json.Length);
+                Library.loadState(_vmPtr, json, (UIntPtr)json.Length);
             }
         }
 
@@ -241,24 +257,6 @@ namespace PeartreeGames.Topiary.Unity
         /// <param name="variableName">The name of the variable</param>
         public bool Unsubscribe(string variableName) =>
             IsVmValid && Library.unsubscribe(_vmPtr, variableName);
-
-        /// <summary>
-        /// Set an Extern variable to a TopiValue
-        /// </summary>
-        /// <param name="variableName">The name of the variable</param>
-        /// <param name="value">The value to set</param>
-        public void Set(string variableName, TopiValue value)
-        {
-            if (!IsVmValid) return;
-            if (!Data.Externs.Contains(variableName))
-            {
-                Log($"{Data.name} does not contain a variable '{variableName}'",
-                    Library.Severity.Warn);
-                return;
-            }
-
-            Library.setExtern(_vmPtr, variableName, value, _freePtr);
-        }
 
         [MonoPInvokeCallback(typeof(Delegates.OnLineDelegate)), Preserve]
         private static void OnLineCallback(IntPtr vmPtr, Line line)
@@ -290,8 +288,9 @@ namespace PeartreeGames.Topiary.Unity
         }
 
         [MonoPInvokeCallback(typeof(Delegates.SubscriberDelegate)), Preserve]
-        private static void ValueChangedCallback(IntPtr vmPtr, string name, TopiValue value)
+        private static void ValueChangedCallback(IntPtr vmPtr, IntPtr namePtr, TopiValue value)
         {
+            var name = Marshal.PtrToStringAnsi(namePtr);
             if (!Dialogues.TryGetValue(vmPtr, out var dialogue))
             {
                 Log($"Dialogue not found for vmPtr {vmPtr.ToInt64()}",
@@ -299,9 +298,6 @@ namespace PeartreeGames.Topiary.Unity
                 return;
             }
 
-#if EVT_TOPIARY
-            dialogue._registrar.OnValueChanged(name, value);
-#endif
             OnValueChanged?.Invoke(dialogue, name, value);
         }
 

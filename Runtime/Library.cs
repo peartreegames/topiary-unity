@@ -16,7 +16,7 @@ namespace PeartreeGames.Topiary.Unity
         [DllImport("topi", CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr createVm(
             IntPtr bytesPtr,
-            int bytesLength,
+            UIntPtr bytesLength,
             IntPtr onLinePtr,
             IntPtr onChoicesPtr,
             IntPtr onValueChangedPtr,
@@ -33,17 +33,17 @@ namespace PeartreeGames.Topiary.Unity
 
         [DllImport("topi", CallingConvention = CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.U4)]
-        public static extern int compile(
+        public static extern UIntPtr compile(
             [MarshalAs(UnmanagedType.LPStr)] string path,
-            byte[] output,
-            int capacity,
+            [Out] byte[] output,
+            UIntPtr capacity,
             IntPtr logPtr,
             Severity severity
         );
 
         [DllImport("topi", CallingConvention = CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.U4)]
-        public static extern int calculateCompileSize(
+        public static extern UIntPtr calculateCompileSize(
             [MarshalAs(UnmanagedType.LPStr)] string path,
             IntPtr logPtr,
             Severity severity
@@ -64,7 +64,7 @@ namespace PeartreeGames.Topiary.Unity
         public static extern bool isWaiting(IntPtr vmPtr);
 
         [DllImport("topi", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void selectChoice(IntPtr vmPtr, int index);
+        public static extern void selectChoice(IntPtr vmPtr, UIntPtr index);
 
         [DllImport("topi", CallingConvention = CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -90,13 +90,13 @@ namespace PeartreeGames.Topiary.Unity
 
         [DllImport("topi", CallingConvention = CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.U4)]
-        public static extern int calculateStateSize(IntPtr vmPtr);
+        public static extern UIntPtr calculateStateSize(IntPtr vmPtr);
 
         [DllImport("topi", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int saveState(IntPtr vmPtr, byte[] output, int capacity);
+        public static extern UIntPtr saveState(IntPtr vmPtr, [Out] byte[] output, UIntPtr capacity);
 
         [DllImport("topi", CallingConvention = CallingConvention.Cdecl)]
         public static extern void loadState(IntPtr vmPtr,
-            [MarshalAs(UnmanagedType.LPStr)] string json, int jsonLength);
+            [MarshalAs(UnmanagedType.LPStr)] string json, UIntPtr jsonLength);
     }
 }

@@ -18,7 +18,7 @@ namespace PeartreeGames.Topiary.Unity
         public delegate TopiValue ExternFunctionDelegate(IntPtr vmPtr, IntPtr argPtr, byte length);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void SubscriberDelegate(IntPtr vmPtr, string name, TopiValue value);
+        public delegate void SubscriberDelegate(IntPtr vmPtr, IntPtr namePtr, TopiValue value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void FreeDelegate(IntPtr ptr);
