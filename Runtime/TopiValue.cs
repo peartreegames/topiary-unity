@@ -379,6 +379,7 @@ namespace PeartreeGames.Topiary.Unity
 
         public TopiList(Dictionary<TopiValue, TopiValue> map)
         {
+            // count is total element count, so a map of N pairs stores 2*N flattened key/value entries
             count = (ushort)(map.Count * 2);
             var size = Marshal.SizeOf(typeof(TopiValue)) * count;
             listPtr = Marshal.AllocHGlobal(size);
@@ -397,9 +398,10 @@ namespace PeartreeGames.Topiary.Unity
         {
             get
             {
-                var map = new Dictionary<TopiValue, TopiValue>(count);
+                var pairs = count / 2;
+                var map = new Dictionary<TopiValue, TopiValue>(pairs);
                 var ptr = listPtr;
-                for (var i = 0; i < count; i++)
+                for (var i = 0; i < pairs; i++)
                 {
                     var key = TopiValue.FromPtr(ptr);
                     ptr = IntPtr.Add(ptr, Marshal.SizeOf<TopiValue>());

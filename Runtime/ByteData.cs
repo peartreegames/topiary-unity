@@ -34,10 +34,7 @@ namespace PeartreeGames.Topiary.Unity
         /// <param name="reader">The binary reader from which to read the extern names.</param>
         public void SetExterns(BinaryReader reader)
         {
-            reader.BaseStream.Position = 0;
-            reader.ReadUInt64(); // Skip Globals section pointer
-            var constantsPos = reader.ReadUInt64();
-            reader.BaseStream.Position = (long)constantsPos;
+            reader.BaseStream.Position = ReadConstantsOffset(reader);
 
             var count = reader.ReadUInt64();
             Externs = new SortedSet<string>();
@@ -63,10 +60,7 @@ namespace PeartreeGames.Topiary.Unity
 
         public void SetBoughs(BinaryReader reader)
         {
-            reader.BaseStream.Position = 0;
-            reader.ReadUInt64(); // Skip Globals section pointer
-            var constantsPos = reader.ReadUInt64();
-            reader.BaseStream.Position = (long)constantsPos;
+            reader.BaseStream.Position = ReadConstantsOffset(reader);
 
             var count = reader.ReadUInt64();
             boughs = new List<string>(); 
@@ -92,6 +86,24 @@ namespace PeartreeGames.Topiary.Unity
                 else SkipConstantValue(reader, type);
             }
 
+        }
+
+        private const string Magic = "TPBC";
+        private const ushort SupportedVersion = 3;
+
+        private static long ReadConstantsOffset(BinaryReader reader)
+        {
+            reader.BaseStream.Position = 0;
+            var magic = Encoding.ASCII.GetString(reader.ReadBytes(4));
+            if (magic != Magic)
+                throw new InvalidDataException($"Invalid topi bytecode magic: '{magic}' (expected '{Magic}').");
+            var version = reader.ReadUInt16();
+            if (version != SupportedVersion)
+                throw new InvalidDataException($"Unsupported topi bytecode version {version} (expected {SupportedVersion}).");
+            reader.ReadUInt16(); // reserved
+            reader.ReadUInt16(); // locals_count
+            reader.ReadUInt64(); // skip Globals offset
+            return (long)reader.ReadUInt64(); // Constants offset
         }
 
         private static void SkipConstantValue(BinaryReader reader, byte type)
@@ -175,6 +187,13 @@ namespace PeartreeGames.Topiary.Unity
                 {
                     var length = reader.ReadUInt16();
                     reader.ReadBytes(length);
+                    var segmentCount = reader.ReadByte();
+                    for (var i = 0; i < segmentCount; i++)
+                    {
+                        var tag = reader.ReadByte();
+                        if (tag == 0) reader.ReadBytes(4); // literal: u16 start + u16 end
+                        else reader.ReadBytes(1);          // interp: u8 index
+                    }
                     break;
                 }
                 case 1: // enum
@@ -198,11 +217,13 @@ namespace PeartreeGames.Topiary.Unity
                     break;
                 case 5: // function
                 {
+                    var nameLength = reader.ReadUInt16();
+                    reader.ReadBytes(nameLength);
                     reader.ReadByte(); // Arity
                     reader.ReadByte(); // Is Method
                     reader.ReadUInt16(); // Locals Count
-                    var instCount = reader.ReadUInt16();
-                    reader.ReadBytes(instCount);
+                    var instCount = reader.ReadUInt32();
+                    reader.ReadBytes((int)instCount);
                     var debugCount = reader.ReadUInt32();
                     for (uint i = 0; i < debugCount; i++)
                     {

@@ -259,7 +259,7 @@ namespace PeartreeGames.Topiary.Unity
             IsVmValid && Library.unsubscribe(_vmPtr, variableName);
 
         [MonoPInvokeCallback(typeof(Delegates.OnLineDelegate)), Preserve]
-        private static void OnLineCallback(IntPtr vmPtr, Line line)
+        private static void OnLineCallback(IntPtr vmPtr, IntPtr linePtr)
         {
             if (!Dialogues.TryGetValue(vmPtr, out var dialogue))
             {
@@ -268,6 +268,7 @@ namespace PeartreeGames.Topiary.Unity
                 return;
             }
 
+            var line = Marshal.PtrToStructure<Line>(linePtr);
             if (dialogue._previousSpeaker != null) dialogue._previousSpeaker.StopSpeaking();
             if (Speakers.TryGetValue(line.Speaker, out var speaker)) speaker.StartSpeaking();
             dialogue._previousSpeaker = speaker;
@@ -288,9 +289,9 @@ namespace PeartreeGames.Topiary.Unity
         }
 
         [MonoPInvokeCallback(typeof(Delegates.SubscriberDelegate)), Preserve]
-        private static void ValueChangedCallback(IntPtr vmPtr, IntPtr namePtr, TopiValue value)
+        private static void ValueChangedCallback(IntPtr vmPtr, IntPtr namePtr, UIntPtr nameLen, TopiValue value)
         {
-            var name = Marshal.PtrToStringAnsi(namePtr);
+            var name = Marshal.PtrToStringAnsi(namePtr, (int)nameLen.ToUInt32());
             if (!Dialogues.TryGetValue(vmPtr, out var dialogue))
             {
                 Log($"Dialogue not found for vmPtr {vmPtr.ToInt64()}",

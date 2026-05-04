@@ -77,10 +77,6 @@ namespace PeartreeGames.Topiary.Unity
             [MarshalAs(UnmanagedType.LPStr)] string name);
 
         [DllImport("topi", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void setExtern(IntPtr vmPtr,
-            [MarshalAs(UnmanagedType.LPStr)] string name, TopiValue value, IntPtr freePtr);
-
-        [DllImport("topi", CallingConvention = CallingConvention.Cdecl)]
         public static extern void setExternFunc(
             IntPtr vmPtr,
             [MarshalAs(UnmanagedType.LPStr)] string name,

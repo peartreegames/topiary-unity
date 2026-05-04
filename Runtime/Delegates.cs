@@ -6,7 +6,7 @@ namespace PeartreeGames.Topiary.Unity
     public static class Delegates
     {
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void OnLineDelegate(IntPtr vmPtr, Line line);
+        public delegate void OnLineDelegate(IntPtr vmPtr, IntPtr linePtr);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void OnChoicesDelegate(IntPtr vmPtr, IntPtr choicePtr, byte length);
@@ -18,7 +18,7 @@ namespace PeartreeGames.Topiary.Unity
         public delegate TopiValue ExternFunctionDelegate(IntPtr vmPtr, IntPtr argPtr, byte length);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void SubscriberDelegate(IntPtr vmPtr, IntPtr namePtr, TopiValue value);
+        public delegate void SubscriberDelegate(IntPtr vmPtr, IntPtr namePtr, UIntPtr nameLen, TopiValue value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void FreeDelegate(IntPtr ptr);
