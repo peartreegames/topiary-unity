@@ -15,12 +15,15 @@ namespace PeartreeGames.Topiary.Unity
         public delegate void OutputLogDelegate(StringBuffer msg, Library.Severity severity);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate TopiValue ExternFunctionDelegate(IntPtr vmPtr, IntPtr argPtr, byte length);
+        public delegate TopiValue ExternFunctionDelegate(IntPtr vmPtr, IntPtr userData, IntPtr argPtr, byte length);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void SubscriberDelegate(IntPtr vmPtr, IntPtr namePtr, UIntPtr nameLen, TopiValue value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void FreeDelegate(IntPtr ptr);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void PanicHandlerDelegate(IntPtr msgPtr, UIntPtr msgLen);
     }
 }

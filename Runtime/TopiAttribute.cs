@@ -6,29 +6,21 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using AOT;
 using UnityEngine;
+using UnityEngine.Scripting;
 
 namespace PeartreeGames.Topiary.Unity
 {
     /// <summary>
     /// Represents an attribute that declares a method as an extern topi function.
-    /// Can only be used on static methods.
+    /// Can only be used on static methods with the signature
+    /// <c>static TopiValue Foo(TopiValue[] args)</c>.
     /// </summary>
     [AttributeUsage(AttributeTargets.Method)]
     public class TopiAttribute : Attribute
     {
-        /// <summary>
-        /// Gets or sets the name of the function in the topi file.
-        /// </summary>
         public string Name { get; }
-
         public byte Arity { get; }
 
-        /// <summary>
-        /// Declare the function as an extern topi function
-        /// Can only be used on static methods
-        /// </summary>
-        /// <param name="name">Name of the function in the topi file</param>
-        /// <param name="arity">The number of arguments this function expects</param>
         public TopiAttribute(string name, byte arity)
         {
             Name = name;
@@ -39,22 +31,51 @@ namespace PeartreeGames.Topiary.Unity
         {
             public string Name;
             public byte Arity;
-            public IntPtr Ptr;
+            public IntPtr UserData;
         }
-    
+
+        private static readonly List<Func<TopiValue[], TopiValue>> Slots = new();
+        private static Delegates.ExternFunctionDelegate _trampoline;
+        public static IntPtr TrampolinePtr { get; private set; }
+
+        [MonoPInvokeCallback(typeof(Delegates.ExternFunctionDelegate)), Preserve]
+        private static TopiValue ExternTrampoline(IntPtr vmPtr, IntPtr userData, IntPtr argsPtr, byte count)
+        {
+            try
+            {
+                var slot = userData.ToInt32();
+                if (slot < 0 || slot >= Slots.Count)
+                {
+                    Debug.LogError($"[Topiary] extern slot {slot} out of range (count {Slots.Count})");
+                    return default;
+                }
+                var args = TopiValue.CreateArgs(argsPtr, count);
+                return Slots[slot](args);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                return default;
+            }
+        }
+
         public static List<FuncPtr> GetAllTopiMethodPtrs()
         {
-            var assemblyRegex = new Regex("^(System|Microsoft|mscorlib|JetBrains)", RegexOptions.Compiled);
+            Slots.Clear();
+            if (_trampoline == null)
+            {
+                _trampoline = ExternTrampoline;
+                TrampolinePtr = Marshal.GetFunctionPointerForDelegate(_trampoline);
+            }
 
+            var assemblyRegex = new Regex("^(System|Microsoft|mscorlib|JetBrains)", RegexOptions.Compiled);
             var assemblies = AppDomain.CurrentDomain.GetAssemblies()
                 .Where(a => !assemblyRegex.IsMatch(a.FullName));
 
             var methods = new List<FuncPtr>();
             foreach (var assembly in assemblies)
             {
-                var types = assembly.GetTypes();
-
-                foreach (var type in types)
+                foreach (var type in assembly.GetTypes())
                 {
                     var tempMethods = type.GetMethods(BindingFlags.Static | BindingFlags.Public |
                                                       BindingFlags.NonPublic);
@@ -63,17 +84,31 @@ namespace PeartreeGames.Topiary.Unity
                     {
                         var attr = method.GetCustomAttribute<TopiAttribute>();
                         if (attr == null) continue;
-                        if (method.GetCustomAttribute<MonoPInvokeCallbackAttribute>() == null)
+
+                        if (method.ReturnType != typeof(TopiValue))
                         {
                             Debug.LogError(
-                                $"Method {method.Name} in {type.FullName} is missing the MonoPInvokeCallback attribute.");
+                                $"[Topi] {type.FullName}.{method.Name} must return TopiValue.");
+                            continue;
+                        }
+                        var ps = method.GetParameters();
+                        if (ps.Length != 1 || ps[0].ParameterType != typeof(TopiValue[]))
+                        {
+                            Debug.LogError(
+                                $"[Topi] {type.FullName}.{method.Name} must take a single TopiValue[] parameter.");
                             continue;
                         }
 
-                        var del =
-                            (Delegates.ExternFunctionDelegate)Delegate.CreateDelegate(
-                                typeof(Delegates.ExternFunctionDelegate), method);
-                        methods.Add(new FuncPtr{ Name = attr.Name, Arity = attr.Arity, Ptr = Marshal.GetFunctionPointerForDelegate(del) });
+                        var fn = (Func<TopiValue[], TopiValue>)Delegate.CreateDelegate(
+                            typeof(Func<TopiValue[], TopiValue>), method);
+                        var slot = Slots.Count;
+                        Slots.Add(fn);
+                        methods.Add(new FuncPtr
+                        {
+                            Name = attr.Name,
+                            Arity = attr.Arity,
+                            UserData = (IntPtr)slot
+                        });
                     }
                 }
             }

@@ -322,11 +322,11 @@ namespace PeartreeGames.Topiary.Unity
         public TopiList(TopiValue[] list)
         {
             count = (ushort)list.Length;
-            var size = Marshal.SizeOf(typeof(TopiValue)) * count;
-            listPtr = Marshal.AllocHGlobal(size);
+            var stride = Marshal.SizeOf<TopiValue>();
+            listPtr = Marshal.AllocHGlobal(stride * count);
             for (var i = 0; i < count; i++)
             {
-                var itemPtr = new IntPtr(listPtr.ToInt64() + i * size);
+                var itemPtr = new IntPtr(listPtr.ToInt64() + i * stride);
                 Marshal.StructureToPtr(list[i], itemPtr, false);
             }
         }
@@ -350,12 +350,12 @@ namespace PeartreeGames.Topiary.Unity
         public TopiList(HashSet<TopiValue> set)
         {
             count = (ushort)set.Count;
-            var size = Marshal.SizeOf(typeof(TopiValue)) * count;
-            listPtr = Marshal.AllocHGlobal(size);
+            var stride = Marshal.SizeOf<TopiValue>();
+            listPtr = Marshal.AllocHGlobal(stride * count);
             var i = 0;
             foreach (var item in set)
             {
-                var itemPtr = new IntPtr(listPtr.ToInt64() + i * size);
+                var itemPtr = new IntPtr(listPtr.ToInt64() + i * stride);
                 i++;
                 Marshal.StructureToPtr(item, itemPtr, false);
             }
@@ -381,14 +381,14 @@ namespace PeartreeGames.Topiary.Unity
         {
             // count is total element count, so a map of N pairs stores 2*N flattened key/value entries
             count = (ushort)(map.Count * 2);
-            var size = Marshal.SizeOf(typeof(TopiValue)) * count;
-            listPtr = Marshal.AllocHGlobal(size);
+            var stride = Marshal.SizeOf<TopiValue>();
+            listPtr = Marshal.AllocHGlobal(stride * count);
             var i = 0;
             foreach (var kvp in map)
             {
-                var itemPtr = new IntPtr(listPtr.ToInt64() + i * size);
+                var itemPtr = new IntPtr(listPtr.ToInt64() + i * stride);
                 i++;
-                var valuePtr = new IntPtr(listPtr.ToInt64() + i * size);
+                var valuePtr = new IntPtr(listPtr.ToInt64() + i * stride);
                 i++;
                 Marshal.StructureToPtr(kvp.Key, itemPtr, false);
                 Marshal.StructureToPtr(kvp.Value, valuePtr, false);

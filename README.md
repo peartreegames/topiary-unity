@@ -81,15 +81,8 @@ Trigger the start of the Dialogue in any way you like with `dialogue.PlayDialogu
 ## Functions
 
 Topiary can call external functions that are marked with the `Topi` attribute.
-
-Any **static** function with `IntPtr, byte` arguments and return type `TopiValue` is valid.
-Originally functions were wrapped and allowed for `TopiValue` arguments to hide the IntPtr
-and CreateArgs requirements, however Unity (the main use case for this package) will not work
-with this work flow. So a more manual approach is required.
-
-`MonoPInvokeCallback` is also required by Unity.
-
-Here's some examples:
+Any **static** function taking a single `TopiValue[]` argument and returning
+`TopiValue` is valid.
 
 ```csharp
 public static class DialogueFunctions
@@ -97,15 +90,12 @@ public static class DialogueFunctions
     // playAnim will be replaced with the C# method.
     // We give the playAnim function a body in our .topi file for testing.
     // A warning will be shown if any extern isn't set when we start our Dialogue.
-    // Preserve is used if code stripping is enabled
     // ex .topi file:
     //      extern const playAnim = |name, clip| {}
     //      playAnim("Player", "Laugh")
     [Topi("playAnim", 2)]
-    [MonoPInvokeCallback(typeof(Delegates.ExternFunctionDelegate)), Preserve]
-    public static TopiValue PlayAnim(IntPtr argsPtr, byte count)
+    public static TopiValue PlayAnim(TopiValue[] args)
     {
-        var args = TopiValue.CreateArgs(argsPtr, count);
         var speakerName = args[0];
         var animClip = args[1];
         if (!Dialogue.Speakers.TryGetValue(speakerName.String, out var topi)) return default;
@@ -114,6 +104,9 @@ public static class DialogueFunctions
     }
 }
 ```
+
+If you target IL2CPP with aggressive code stripping, add `[Preserve]` to the method
+or list the assembly in a `link.xml` so the reflection-based discovery can find it.
 
 ## TopiValue
 

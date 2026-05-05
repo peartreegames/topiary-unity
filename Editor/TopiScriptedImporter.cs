@@ -80,9 +80,9 @@ namespace PeartreeGames.Topiary.Unity.Editor
                 addressable.SetLabel("Topi", true);
                 EditorUtility.SetDirty(settings);
             }
-            catch (EndOfStreamException e)
+            catch (Exception e)
             {
-                Debug.LogError(e.Message);
+                ctx.LogImportError($"Failed to import {ctx.assetPath}: {e}");
                 asset = new TextAsset(text);
                 icon = Resources.Load<Texture2D>("error");
                 ctx.AddObjectToAsset("main", asset, icon);
@@ -94,20 +94,24 @@ namespace PeartreeGames.Topiary.Unity.Editor
             Library.Severity ctxSeverity) =>
             (str, severity) =>
             {
-                var msg = str.Value;
-                switch (severity)
+                try
                 {
-                    case Library.Severity.Debug when ctxSeverity <= Library.Severity.Debug:
-                    case Library.Severity.Info when ctxSeverity >= Library.Severity.Info:
-                        Debug.Log(msg);
-                        break;
-                    case Library.Severity.Warn when ctxSeverity >= Library.Severity.Warn:
-                        ctx.LogImportWarning(msg);
-                        break;
-                    case Library.Severity.Error:
-                        ctx.LogImportError(msg);
-                        break;
+                    var msg = str.Value;
+                    switch (severity)
+                    {
+                        case Library.Severity.Debug when ctxSeverity <= Library.Severity.Debug:
+                        case Library.Severity.Info when ctxSeverity >= Library.Severity.Info:
+                            Debug.Log(msg);
+                            break;
+                        case Library.Severity.Warn when ctxSeverity >= Library.Severity.Warn:
+                            ctx.LogImportWarning(msg);
+                            break;
+                        case Library.Severity.Error:
+                            ctx.LogImportError(msg);
+                            break;
+                    }
                 }
+                catch (Exception e) { Debug.LogException(e); }
             };
     }
 }

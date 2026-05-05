@@ -44,11 +44,13 @@ namespace PeartreeGames.Topiary.Unity
         private static Delegates.SubscriberDelegate _subscriberCallback;
         private static Delegates.OutputLogDelegate _onLogCallback;
         private static Delegates.FreeDelegate _freeCallback;
+        private static Delegates.PanicHandlerDelegate _panicCallback;
         private static IntPtr _choicesPtr;
         private static IntPtr _linePtr;
         private static IntPtr _subscriberPtr;
         private static IntPtr _logPtr;
         private static IntPtr _freePtr;
+        private static IntPtr _panicPtr;
 
         private bool IsVmValid
         {
@@ -74,12 +76,15 @@ namespace PeartreeGames.Topiary.Unity
             _onLogCallback = LogCallback;
             _subscriberCallback = ValueChangedCallback;
             _freeCallback = Free;
+            _panicCallback = PanicCallback;
 
             _subscriberPtr = Marshal.GetFunctionPointerForDelegate(_subscriberCallback);
             _linePtr = Marshal.GetFunctionPointerForDelegate(_onLineCallback);
             _choicesPtr = Marshal.GetFunctionPointerForDelegate(_onChoicesCallback);
             _logPtr = Marshal.GetFunctionPointerForDelegate(_onLogCallback);
             _freePtr = Marshal.GetFunctionPointerForDelegate(_freeCallback);
+            _panicPtr = Marshal.GetFunctionPointerForDelegate(_panicCallback);
+            Library.setPanicHandler(_panicPtr);
 
             FunctionPtrs.AddRange(TopiAttribute.GetAllTopiMethodPtrs());
         }
@@ -129,10 +134,24 @@ namespace PeartreeGames.Topiary.Unity
             }
 
 
+            if (Data.bytes == null || Data.bytes.Length == 0)
+            {
+                Log($"{gameObject.name} ByteData has no bytes for {data.RuntimeKey}",
+                    Library.Severity.Error);
+                yield break;
+            }
+
             _pinnedHandle = GCHandle.Alloc(Data.bytes, GCHandleType.Pinned);
             var sourcePtr = _pinnedHandle.AddrOfPinnedObject();
             _vmPtr = Library.createVm(sourcePtr, (UIntPtr)Data.bytes.Length, _linePtr, _choicesPtr,
                 _subscriberPtr, _logPtr, logs);
+            if (_vmPtr == IntPtr.Zero)
+            {
+                Log($"{gameObject.name} failed to create VM for {data.RuntimeKey}",
+                    Library.Severity.Error);
+                _pinnedHandle.Free();
+                yield break;
+            }
             Dialogues.Add(_vmPtr, this);
         }
 
@@ -244,7 +263,7 @@ namespace PeartreeGames.Topiary.Unity
         {
             if (json != null && IsVmValid)
             {
-                Library.loadState(_vmPtr, json, (UIntPtr)json.Length);
+                Library.loadState(_vmPtr, json, (UIntPtr)Encoding.UTF8.GetByteCount(json));
             }
         }
 
@@ -261,53 +280,85 @@ namespace PeartreeGames.Topiary.Unity
         [MonoPInvokeCallback(typeof(Delegates.OnLineDelegate)), Preserve]
         private static void OnLineCallback(IntPtr vmPtr, IntPtr linePtr)
         {
-            if (!Dialogues.TryGetValue(vmPtr, out var dialogue))
+            try
             {
-                Log($"Dialogue not found for vmPtr {vmPtr.ToInt64()}",
-                    Library.Severity.Error);
-                return;
-            }
+                if (!Dialogues.TryGetValue(vmPtr, out var dialogue))
+                {
+                    Log($"Dialogue not found for vmPtr {vmPtr.ToInt64()}",
+                        Library.Severity.Error);
+                    return;
+                }
 
-            var line = Marshal.PtrToStructure<Line>(linePtr);
-            if (dialogue._previousSpeaker != null) dialogue._previousSpeaker.StopSpeaking();
-            if (Speakers.TryGetValue(line.Speaker, out var speaker)) speaker.StartSpeaking();
-            dialogue._previousSpeaker = speaker;
-            OnLine?.Invoke(dialogue, line, speaker);
+                var line = Marshal.PtrToStructure<Line>(linePtr);
+                if (dialogue._previousSpeaker != null) dialogue._previousSpeaker.StopSpeaking();
+                if (Speakers.TryGetValue(line.Speaker, out var speaker)) speaker.StartSpeaking();
+                dialogue._previousSpeaker = speaker;
+                OnLine?.Invoke(dialogue, line, speaker);
+            }
+            catch (Exception e) { Debug.LogException(e); }
         }
 
         [MonoPInvokeCallback(typeof(Delegates.OnChoicesDelegate)), Preserve]
         private static void OnChoicesCallback(IntPtr vmPtr, IntPtr choicesPtr, byte count)
         {
-            if (!Dialogues.TryGetValue(vmPtr, out var dialogue))
+            try
             {
-                Log($"Dialogue not found for vmPtr {vmPtr.ToInt64()}",
-                    Library.Severity.Error);
-                return;
-            }
+                if (!Dialogues.TryGetValue(vmPtr, out var dialogue))
+                {
+                    Log($"Dialogue not found for vmPtr {vmPtr.ToInt64()}",
+                        Library.Severity.Error);
+                    return;
+                }
 
-            OnChoices?.Invoke(dialogue, Choice.MarshalPtr(choicesPtr, count));
+                OnChoices?.Invoke(dialogue, Choice.MarshalPtr(choicesPtr, count));
+            }
+            catch (Exception e) { Debug.LogException(e); }
         }
 
         [MonoPInvokeCallback(typeof(Delegates.SubscriberDelegate)), Preserve]
         private static void ValueChangedCallback(IntPtr vmPtr, IntPtr namePtr, UIntPtr nameLen, TopiValue value)
         {
-            var name = Marshal.PtrToStringAnsi(namePtr, (int)nameLen.ToUInt32());
-            if (!Dialogues.TryGetValue(vmPtr, out var dialogue))
+            try
             {
-                Log($"Dialogue not found for vmPtr {vmPtr.ToInt64()}",
-                    Library.Severity.Error);
-                return;
-            }
+                var name = Marshal.PtrToStringAnsi(namePtr, (int)nameLen.ToUInt32());
+                if (!Dialogues.TryGetValue(vmPtr, out var dialogue))
+                {
+                    Log($"Dialogue not found for vmPtr {vmPtr.ToInt64()}",
+                        Library.Severity.Error);
+                    return;
+                }
 
-            OnValueChanged?.Invoke(dialogue, name, value);
+                OnValueChanged?.Invoke(dialogue, name, value);
+            }
+            catch (Exception e) { Debug.LogException(e); }
         }
 
         [MonoPInvokeCallback(typeof(Delegates.OutputLogDelegate)), Preserve]
-        private static void LogCallback(StringBuffer str, Library.Severity severity) =>
-            Log(str.Value, severity);
+        private static void LogCallback(StringBuffer str, Library.Severity severity)
+        {
+            try { Log(str.Value, severity); }
+            catch (Exception e) { Debug.LogException(e); }
+        }
 
         [MonoPInvokeCallback(typeof(Delegates.FreeDelegate)), Preserve]
-        internal static void Free(IntPtr ptr) => Marshal.FreeHGlobal(ptr);
+        internal static void Free(IntPtr ptr)
+        {
+            try { Marshal.FreeHGlobal(ptr); }
+            catch (Exception e) { Debug.LogException(e); }
+        }
+
+        [MonoPInvokeCallback(typeof(Delegates.PanicHandlerDelegate)), Preserve]
+        private static void PanicCallback(IntPtr msgPtr, UIntPtr msgLen)
+        {
+            // Process state is undefined here; keep this minimal — no allocations,
+            // no Unity API beyond Debug.LogError, no re-entry into Topi.
+            try
+            {
+                var msg = Marshal.PtrToStringUTF8(msgPtr, (int)msgLen.ToUInt32());
+                Debug.LogError($"[Topiary] Native panic: {msg}");
+            }
+            catch { /* swallow — we're already in undefined state */ }
+        }
 
         public static void Log(string msg, Library.Severity severity)
         {
@@ -334,7 +385,8 @@ namespace PeartreeGames.Topiary.Unity
             foreach (var func in FunctionPtrs)
             {
                 if (Data.Externs.Contains(func.Name))
-                    Library.setExternFunc(_vmPtr, func.Name, func.Ptr, func.Arity, _freePtr);
+                    Library.setExternFunc(_vmPtr, func.Name, TopiAttribute.TrampolinePtr,
+                        func.Arity, func.UserData, _freePtr);
             }
         }
     }

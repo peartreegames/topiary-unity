@@ -1,4 +1,6 @@
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using UnityEngine;
 
 namespace PeartreeGames.Topiary.Unity
 {
@@ -13,11 +15,19 @@ namespace PeartreeGames.Topiary.Unity
         /// <param name="jsonString"></param>
         public void Amend(string jsonString)
         {
-            if (_rootState == null) _rootState = JObject.Parse(jsonString);
-            else
+            if (string.IsNullOrEmpty(jsonString)) return;
+            try
             {
-                var jObj = JObject.Parse(jsonString);
-                foreach (var item in jObj) _rootState[item.Key] = item.Value;
+                if (_rootState == null) _rootState = JObject.Parse(jsonString);
+                else
+                {
+                    var jObj = JObject.Parse(jsonString);
+                    foreach (var item in jObj) _rootState[item.Key] = item.Value;
+                }
+            }
+            catch (JsonException e)
+            {
+                Debug.LogError($"[Topiary] State.Amend failed to parse JSON: {e.Message}");
             }
         }
 
