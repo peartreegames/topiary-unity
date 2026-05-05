@@ -8,9 +8,6 @@ Checkout the [syntax](https://peartree.games/topiary/docs/syntax) file if you're
 
 Can be installed via the Package Manager > Add Package From Git URL...
 
-This repo has an optional dependency on the EvtVariable package which can be installed. 
-`https://github.com/peartreegames/evt-variables.git`
-
 This package also depends on the Unity Addressables package, which should automatically be installed, but if you have any issues please install it manually from the Package Manager.
 
 then the repo can be added
@@ -146,8 +143,3 @@ value.Float // Incorrect property access, throws an error or returns malformed/i
 value.String // Incorrect property access, throws an error or returns malformed/incorrect data
 value.Bool // true
 ```
-
-## EvtVariables
-
-I've made [EvtTopiary](https://github.com/peartreegames/evt-topiary), a ScriptableObject event system architecture, an optional add-on.
-You can also use the repo as an example of how you might want to connect Topiary variables to your own systems.
