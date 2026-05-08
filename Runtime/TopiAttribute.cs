@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using AOT;
 using UnityEngine;
 using UnityEngine.Scripting;
@@ -68,9 +67,10 @@ namespace PeartreeGames.Topiary.Unity
                 TrampolinePtr = Marshal.GetFunctionPointerForDelegate(_trampoline);
             }
 
-            var assemblyRegex = new Regex("^(System|Microsoft|mscorlib|JetBrains)", RegexOptions.Compiled);
+            var topiAssembly = typeof(TopiAttribute).Assembly;
+            var topiName = topiAssembly.GetName().Name;
             var assemblies = AppDomain.CurrentDomain.GetAssemblies()
-                .Where(a => !assemblyRegex.IsMatch(a.FullName));
+                .Where(a => a == topiAssembly || a.GetReferencedAssemblies().Any(r => r.Name == topiName));
 
             var methods = new List<FuncPtr>();
             foreach (var assembly in assemblies)
