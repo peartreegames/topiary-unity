@@ -11,12 +11,12 @@ namespace PeartreeGames.Topiary.Unity
         public UnityEvent<Speaker> OnStartSpeaking => onStartSpeaking;
         public UnityEvent<Speaker> OnStopSpeaking => onStopSpeaking;
         
-        protected void Awake()
+        private void Awake()
         {
             Dialogue.AddSpeaker(this);
         }
 
-        protected void OnDestroy()
+        private void OnDestroy()
         {
             Dialogue.RemoveSpeaker(this);
         }
@@ -26,7 +26,8 @@ namespace PeartreeGames.Topiary.Unity
 
         private void OnValidate()
         {
-            Debug.Assert(!string.IsNullOrEmpty(name), "TopiSpeaker must have a name"); 
+            Debug.Assert(!string.IsNullOrEmpty(Id),
+                $"Speaker '{name}' must have an Id matching the speaker name in the .topi file");
         }
     }
 }
