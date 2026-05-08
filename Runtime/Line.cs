@@ -3,45 +3,46 @@ using System.Runtime.InteropServices;
 
 namespace PeartreeGames.Topiary.Unity
 {
-    
-    /// <summary>
-    /// Dialogue Line
-    /// </summary>
-    [StructLayout(LayoutKind.Sequential)]
     public readonly struct Line
+    {
+        public string Speaker { get; }
+        public string Content { get; }
+        public string[] Tags { get; }
+
+        public Line(string speaker, string content, string[] tags)
+        {
+            Speaker = speaker;
+            Content = content;
+            Tags = tags ?? Array.Empty<string>();
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal readonly struct LineNative
     {
         private readonly StringBuffer _content;
         private readonly StringBuffer _speaker;
         private readonly IntPtr _tagsPtr;
         private readonly byte _tagsLen;
 
-        /// <summary>
-        /// The Speaker of the dialogue line
-        /// </summary>
-        public string Speaker => _speaker.Value; 
-        /// <summary>
-        /// The words spoken
-        /// </summary>
-        public string Content => _content.Value;
-        
-        /// <summary>
-        /// Array of tags
-        /// </summary>
-        public string[] Tags
+        public Line ToManaged()
         {
-            get
+            string[] tags;
+            if (_tagsLen == 0)
             {
-                if (_tagsLen == 0) return Array.Empty<string>();
-                var offset = 0;
-                var tags = new string[_tagsLen];
+                tags = Array.Empty<string>();
+            }
+            else
+            {
+                tags = new string[_tagsLen];
+                var ptr = _tagsPtr;
                 for (var i = 0; i < _tagsLen; i++)
                 {
-                    var str = Marshal.PtrToStructure<StringBuffer>(_tagsPtr + offset);
-                    tags[i] = str.Value;
-                    offset += Marshal.SizeOf<StringBuffer>();
+                    tags[i] = Marshal.PtrToStructure<StringBuffer>(ptr).Value;
+                    ptr = IntPtr.Add(ptr, StringBuffer.Stride);
                 }
-                return tags;
             }
+            return new Line(_speaker.Value, _content.Value, tags);
         }
     }
 }
