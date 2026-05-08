@@ -4,7 +4,9 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 using AOT;
+#if ODIN_INSPECTOR
 using Sirenix.OdinInspector;
+#endif
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
@@ -25,6 +27,7 @@ namespace PeartreeGames.Topiary.Unity
         private Speaker _previousSpeaker;
         private GCHandle _pinnedHandle;
         private IntPtr _vmPtr;
+        private Coroutine _playCoroutine;
         public string[] Tags => tags;
 
         public static event Func<Dialogue, IEnumerator> OnStart;
@@ -33,7 +36,10 @@ namespace PeartreeGames.Topiary.Unity
         public static event Action<Dialogue, Choice[]> OnChoices;
         public static event Action<Dialogue, string, TopiValue> OnValueChanged;
 
-        [ShowInInspector] public static readonly State State = new();
+#if ODIN_INSPECTOR
+        [ShowInInspector]
+#endif
+        public static readonly State State = new();
         public static readonly Dictionary<string, Speaker> Speakers = new();
         public static readonly Dictionary<IntPtr, Dialogue> Dialogues = new();
 
@@ -153,6 +159,7 @@ namespace PeartreeGames.Topiary.Unity
                 yield break;
             }
             Dialogues.Add(_vmPtr, this);
+            LoadFunctions();
         }
 
         private void OnDestroy()
@@ -187,13 +194,22 @@ namespace PeartreeGames.Topiary.Unity
             if (IsVmValid) Library.selectChoice(_vmPtr, (UIntPtr)index);
         }
 
-        public void PlayDialogue(string start = null) => StartCoroutine(Play(start));
+        public void Play(string start = null)
+        {
+            if (_playCoroutine != null) StopCoroutine(_playCoroutine);
+            _playCoroutine = StartCoroutine(RunPlay(start));
+        }
 
-        public IEnumerator Play(string start = null)
+        private IEnumerator RunPlay(string start)
+        {
+            yield return PlayCoroutine(start);
+            _playCoroutine = null;
+        }
+
+        public IEnumerator PlayCoroutine(string start = null)
         {
             if (!IsVmValid) yield break;
             SetState(State.Value);
-            LoadFunctions();
             yield return null;
 
             if (OnStart != null)
@@ -236,7 +252,11 @@ namespace PeartreeGames.Topiary.Unity
 
         public void Stop()
         {
-            StopAllCoroutines();
+            if (_playCoroutine != null)
+            {
+                StopCoroutine(_playCoroutine);
+                _playCoroutine = null;
+            }
             End();
         }
 
@@ -254,7 +274,6 @@ namespace PeartreeGames.Topiary.Unity
             if (!IsVmValid) return null;
             var capacity = Library.calculateStateSize(_vmPtr);
             var output = new byte[(int)capacity];
-            if (!IsVmValid) return null;
             _ = Library.saveState(_vmPtr, output, (UIntPtr)output.Length);
             return Encoding.UTF8.GetString(output);
         }
@@ -289,7 +308,7 @@ namespace PeartreeGames.Topiary.Unity
                     return;
                 }
 
-                var line = Marshal.PtrToStructure<Line>(linePtr);
+                var line = Marshal.PtrToStructure<LineNative>(linePtr).ToManaged();
                 if (dialogue._previousSpeaker != null) dialogue._previousSpeaker.StopSpeaking();
                 if (Speakers.TryGetValue(line.Speaker, out var speaker)) speaker.StartSpeaking();
                 dialogue._previousSpeaker = speaker;
@@ -320,7 +339,7 @@ namespace PeartreeGames.Topiary.Unity
         {
             try
             {
-                var name = Marshal.PtrToStringAnsi(namePtr, (int)nameLen.ToUInt32());
+                var name = Marshal.PtrToStringUTF8(namePtr, (int)nameLen.ToUInt32());
                 if (!Dialogues.TryGetValue(vmPtr, out var dialogue))
                 {
                     Log($"Dialogue not found for vmPtr {vmPtr.ToInt64()}",
