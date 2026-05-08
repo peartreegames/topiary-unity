@@ -44,10 +44,10 @@ public class DialogueRunner : MonoBehaviour
         // Perform any tasks for dialogue to start
     }
 
-    private void OnLine(Dialogue dialogue, Line line, TopiSpeaker topiSpeaker)
+    private void OnLine(Dialogue dialogue, Line line, Speaker speaker)
     {
         // Update the UI to display the next line
-        // Use dialogue.SelectContinue() to continue the script
+        // Use dialogue.Continue() to continue the script
     }
 
     private void OnChoices(Dialogue dialogue, Choice[] choices)
@@ -65,15 +65,15 @@ public class DialogueRunner : MonoBehaviour
 }
 ```
 
-## Setup
-
 Any `.topi` file will automatically be compiled and converted into a `.topi.byte` bytecode.
 
 Once your file is compiled it will automatically be added to a Topiary Addressables group with the labels `Topiary` and `Topi`.
 
 Add a `Dialogue` MonoBehaviour to a GameObject and select the `.topi` file you want to associate with that Dialogue. 
 
-Trigger the start of the Dialogue in any way you like with `dialogue.PlayDialogue()` or `StartCoroutine(dialogue.Play())`
+Trigger the start of the Dialogue with `dialogue.Play()` or `StartCoroutine(dialogue.PlayCoroutine())` if you want to `yield return` on the play loop from another coroutine.
+
+A `Speaker` MonoBehaviour on a GameObject self-registers (keyed by its `Id` field, which must match the speaker name in the `.topi` source) and exposes `OnStartSpeaking` / `OnStopSpeaking` UnityEvents that fire as the VM toggles speakers across lines.
 
 ## Functions
 
@@ -115,19 +115,19 @@ and different fields are overlaying each other.
 
 ```csharp
     [StructLayout(LayoutKind.Sequential)]
-    public struct TopiValue : IDisposable, IEquatable<TopiValue>
+    public struct TopiValue : IEquatable<TopiValue>, IDisposable
     {
-        [MarshalAs(UnmanagedType.U1)] public Tag tag;
+        public Tag tag;
         private TopiValueData _data;
         ...
     }
-    
+
     [StructLayout(LayoutKind.Explicit)]
-    public struct TopiValueData
+    internal struct TopiValueData
     {
-        [FieldOffset(0)] [MarshalAs(UnmanagedType.I1)] public byte boolValue;
-        [FieldOffset(0)] [MarshalAs(UnmanagedType.R4)] public float numberValue;
-        [FieldOffset(0)] public IntPtr stringValue;
+        [FieldOffset(0)] public byte boolValue;
+        [FieldOffset(0)] public float numberValue;
+        [FieldOffset(0)] public StringBuffer stringValue;
         [FieldOffset(0)] public TopiList listValue;
         [FieldOffset(0)] public TopiEnum enumValue;
     }
@@ -143,3 +143,20 @@ value.Float // Incorrect property access, throws an error or returns malformed/i
 value.String // Incorrect property access, throws an error or returns malformed/incorrect data
 value.Bool // true
 ```
+
+`String`, `List`, `Set`, `Map`, and `Value` re-walk native memory on every access — capture into a local for hot loops:
+
+```csharp
+var list = value.List; // walk once
+foreach (var item in list) { ... }
+```
+
+### Memory ownership
+
+`TopiValue` implements `IDisposable`. String / Enum / List / Set / Map values own unmanaged buffers; when you return one from a `[Topi]` extern, the native side releases it for you. If you construct one and **don't** hand it to native (rare — usually for tests or advanced cases), call `Dispose()` to free.
+
+For containers, ownership transfers downward — wrapping `TopiValue`s in a list takes ownership of their inner allocations. Don't dispose the originals separately, and don't double-dispose.
+
+## State persistence
+
+`Dialogue.State` is a static singleton that aggregates JSON state across `Play()` runs via `State.Amend`. To restore, call `State.Set(json)` or `State.Amend(json)` before `Play()` and the VM will be primed with that data. Both methods early-return on null/empty input and log on JSON parse errors.
