@@ -50,9 +50,7 @@ namespace PeartreeGames.Topiary.Unity.Editor
                 bytedata.bytes = output;
 
                 reader.BaseStream.Position = 0;
-                bytedata.SetExterns(reader);
-                reader.BaseStream.Position = 0;
-                bytedata.SetBoughs(reader);
+                bytedata.Parse(reader);
                 if (bytedata.Boughs.Count == 0)
                 {
                     var empty = new TextAsset(text);
