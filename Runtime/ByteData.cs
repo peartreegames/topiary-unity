@@ -1,13 +1,13 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 using UnityEngine;
 
 namespace PeartreeGames.Topiary.Unity
 {
     /// <summary>
-    /// Represents a class that holds byte data and a set of external references.
+    /// Compiled topi bytecode plus the externs/boughs index extracted from the constants section.
     /// </summary>
     public class ByteData : ScriptableObject
     {
@@ -16,76 +16,105 @@ namespace PeartreeGames.Topiary.Unity
         /// </summary>
         public byte[] bytes;
 
-        /// <summary>
-        /// Represents a byte data object that can be serialized and deserialized.
-        /// </summary>
         [SerializeField] private string[] externs;
-
         [SerializeField] private List<string> boughs;
 
-        public SortedSet<string> Externs { get; private set; }
+        private HashSet<string> _externSet;
+
+        // Lazily materialized from the serialized `externs` array. The cache is rebuilt
+        // on first access in built players (where Parse never runs).
+        public HashSet<string> Externs =>
+            _externSet ??= new HashSet<string>(externs ?? Array.Empty<string>());
+
         public List<string> Boughs => boughs;
-        public void OnBeforeSerialize() => externs = Externs?.ToArray();
-        public void OnAfterDeserialize() => Externs = new SortedSet<string>(externs);
+
+        // Mirrors topiary/src/types/value.zig `Type`.
+        private enum ConstantTag : byte
+        {
+            Void = 0,
+            Nil = 1,
+            Bool = 2,
+            Number = 3,
+            Range = 4,
+            Obj = 5,
+            MapPair = 6,
+            Visit = 7,
+            EnumValue = 8,
+            Timestamp = 9,
+            ConstString = 10,
+            Ref = 11,
+        }
+
+        // Mirrors topiary/src/types/value.zig `Obj.DataType`.
+        private enum ObjectTag : byte
+        {
+            String = 0,
+            Enum = 1,
+            List = 2,
+            Map = 3,
+            Set = 4,
+            Function = 5,
+            Extern = 6,
+            Builtin = 7,
+            Class = 8,
+            Instance = 9,
+            Anchor = 10,
+        }
 
         /// <summary>
-        /// Retrieves a sorted set of extern names from the given binary reader.
+        /// Reads externs and boughs from the bytecode constants section in a single pass.
+        /// Editor-only path, called by <c>TopiScriptedImporter</c>.
         /// </summary>
-        /// <param name="reader">The binary reader from which to read the extern names.</param>
-        public void SetExterns(BinaryReader reader)
+        public void Parse(BinaryReader reader)
         {
             reader.BaseStream.Position = ReadConstantsOffset(reader);
 
             var count = reader.ReadUInt64();
-            Externs = new SortedSet<string>();
+            var externSet = new HashSet<string>();
+            boughs = new List<string>();
+
             for (ulong i = 0; i < count; i++)
             {
-                var type = reader.ReadByte();
-                if (type == 5) // Object
+                var type = (ConstantTag)reader.ReadByte();
+                if (type != ConstantTag.Obj)
                 {
-                    var objType = reader.ReadByte();
-                    reader.ReadBytes(17); // Skip UUID
-                    if (objType == 6) // ExternFunction
+                    SkipConstantValue(reader, type);
+                    continue;
+                }
+
+                var objType = (ObjectTag)reader.ReadByte();
+                reader.ReadBytes(17); // UUID
+
+                switch (objType)
+                {
+                    case ObjectTag.Extern:
                     {
                         var nameLength = reader.ReadByte();
                         var externName = Encoding.UTF8.GetString(reader.ReadBytes(nameLength));
-                        reader.ReadByte(); // Arity
-                        Externs.Add(externName);
+                        reader.ReadByte(); // arity
+                        externSet.Add(externName);
+                        break;
                     }
-                    else SkipObjectValue(reader, objType);
-                }
-                else SkipConstantValue(reader, type);
-            }
-        }
-
-        public void SetBoughs(BinaryReader reader)
-        {
-            reader.BaseStream.Position = ReadConstantsOffset(reader);
-
-            var count = reader.ReadUInt64();
-            boughs = new List<string>(); 
-            for (ulong i = 0; i < count; i++)
-            {
-                var type = reader.ReadByte();
-                if (type == 5) // Object
-                {
-                    var objType = reader.ReadByte();
-                    reader.ReadBytes(17); // Skip UUID
-                    if (objType == 10) // Anchor
+                    case ObjectTag.Anchor:
                     {
                         var nameLength = reader.ReadUInt16();
                         var anchorName = Encoding.UTF8.GetString(reader.ReadBytes(nameLength));
-                        reader.ReadUInt32(); // Ip
-                        reader.ReadUInt32(); // VisitGlobalsIndex
+                        reader.ReadUInt32(); // ip
+                        reader.ReadUInt32(); // visitGlobalsIndex
                         var hasParent = reader.ReadByte() == 1;
                         if (hasParent) reader.ReadUInt32();
                         boughs.Add(anchorName);
+                        break;
                     }
-                    else SkipObjectValue(reader, objType);
+                    default:
+                        SkipObjectValue(reader, objType);
+                        break;
                 }
-                else SkipConstantValue(reader, type);
             }
 
+            externs = new string[externSet.Count];
+            externSet.CopyTo(externs);
+            _externSet = externSet;
         }
 
         private const string Magic = "TPBC";
@@ -106,84 +135,84 @@ namespace PeartreeGames.Topiary.Unity
             return (long)reader.ReadUInt64(); // Constants offset
         }
 
-        private static void SkipConstantValue(BinaryReader reader, byte type)
+        private static void SkipConstantValue(BinaryReader reader, ConstantTag type)
         {
             switch (type)
             {
-                case 0: // void
-                case 1: // nil
+                case ConstantTag.Void:
+                case ConstantTag.Nil:
                     break;
-                case 2: // bool
+                case ConstantTag.Bool:
                     reader.ReadByte();
                     break;
-                case 3: // number
+                case ConstantTag.Number:
                 {
                     var length = reader.ReadByte();
                     reader.ReadBytes(length);
                     break;
                 }
-                case 4: // range
+                case ConstantTag.Range:
                     reader.ReadInt32(); // Start
                     reader.ReadInt32(); // End
                     break;
-                case 6: // map_pair
+                case ConstantTag.MapPair:
                 {
-                    var keyType = reader.ReadByte();
-                    if (keyType == 5)
-                    {
-                        var objType = reader.ReadByte();
-                        reader.ReadBytes(17);
-                        SkipObjectValue(reader, objType);
-                    }
-                    else
-                    {
-                        SkipConstantValue(reader, keyType);
-                    }
-
-                    var valueType = reader.ReadByte();
-                    if (valueType == 5)
-                    {
-                        var objType = reader.ReadByte();
-                        reader.ReadBytes(17);
-                        SkipObjectValue(reader, objType);
-                    }
-                    else
-                    {
-                        SkipConstantValue(reader, valueType);
-                    }
-
+                    SkipNested(reader);
+                    SkipNested(reader);
                     break;
                 }
-                case 7: // visit
+                case ConstantTag.Visit:
                     reader.ReadUInt32();
                     break;
-                case 8: // enum_value
+                case ConstantTag.EnumValue:
                 {
                     var length = reader.ReadByte();
                     reader.ReadBytes(length);
                     break;
                 }
-                case 9: // timestamp
+                case ConstantTag.Timestamp:
                     reader.ReadInt64();
                     break;
-                case 10: // const_string
+                case ConstantTag.ConstString:
                 {
                     var length = reader.ReadUInt16();
                     reader.ReadBytes(length);
                     break;
                 }
-                case 11: // ref
-                    // Not detailed in ValueType details, but let's assume it's like a pointer/index (u32/u64?)
-                    // The spec doesn't say. I'll ignore for now or assume u32 if I had to guess.
-                    break;
+                case ConstantTag.Ref:
+                    // Zig serialize errors on this tag, so it cannot appear as a top-level
+                    // constant. Hitting it means the bytecode format has drifted; silently
+                    // skipping would corrupt the rest of the section.
+                    throw new InvalidDataException(
+                        "Unexpected 'ref' constant tag in constants section.");
+                default:
+                    throw new InvalidDataException(
+                        $"Unknown constant tag {(byte)type} in constants section.");
             }
         }
 
-        private static void SkipObjectValue(BinaryReader reader, byte objType)
+        // Reads a constant tag and either recurses into SkipConstantValue or unwraps an
+        // Obj header (objType + UUID) before delegating to SkipObjectValue.
+        private static void SkipNested(BinaryReader reader)
+        {
+            var type = (ConstantTag)reader.ReadByte();
+            if (type == ConstantTag.Obj)
+            {
+                var objType = (ObjectTag)reader.ReadByte();
+                reader.ReadBytes(17);
+                SkipObjectValue(reader, objType);
+            }
+            else
+            {
+                SkipConstantValue(reader, type);
+            }
+        }
+
+        private static void SkipObjectValue(BinaryReader reader, ObjectTag objType)
         {
             switch (objType)
             {
-                case 0: // string
+                case ObjectTag.String:
                 {
                     var length = reader.ReadUInt16();
                     reader.ReadBytes(length);
@@ -196,7 +225,7 @@ namespace PeartreeGames.Topiary.Unity
                     }
                     break;
                 }
-                case 1: // enum
+                case ObjectTag.Enum:
                 {
                     var nameLength = reader.ReadByte();
                     reader.ReadBytes(nameLength);
@@ -207,15 +236,14 @@ namespace PeartreeGames.Topiary.Unity
                         var len = reader.ReadByte();
                         reader.ReadBytes(len);
                     }
-
                     break;
                 }
-                case 2: // list
-                case 3: // map
-                case 4: // set
+                case ObjectTag.List:
+                case ObjectTag.Map:
+                case ObjectTag.Set:
                     // Non-constants
                     break;
-                case 5: // function
+                case ObjectTag.Function:
                 {
                     var nameLength = reader.ReadUInt16();
                     reader.ReadBytes(nameLength);
@@ -232,23 +260,22 @@ namespace PeartreeGames.Topiary.Unity
                         var rangeCount = reader.ReadUInt16();
                         reader.BaseStream.Position += rangeCount * 12; // Range is 3 * u32 = 12 bytes
                     }
-
                     break;
                 }
-                case 6: // extern
+                case ObjectTag.Extern:
                 {
                     var length = reader.ReadByte();
                     reader.ReadBytes(length);
                     reader.ReadByte(); // Arity
                     break;
                 }
-                case 7: // builtin
+                case ObjectTag.Builtin:
                 {
                     var length = reader.ReadByte();
                     reader.ReadBytes(length);
                     break;
                 }
-                case 8: // class
+                case ObjectTag.Class:
                 {
                     var nameLength = reader.ReadByte();
                     reader.ReadBytes(nameLength);
@@ -258,9 +285,9 @@ namespace PeartreeGames.Topiary.Unity
                     for (var i = 0; i < methodCount; i++) SkipMember(reader);
                     break;
                 }
-                case 9: // instance
+                case ObjectTag.Instance:
                     break;
-                case 10: // anchor
+                case ObjectTag.Anchor:
                 {
                     var length = reader.ReadUInt16();
                     reader.ReadBytes(length);
@@ -277,17 +304,7 @@ namespace PeartreeGames.Topiary.Unity
         {
             var length = reader.ReadByte();
             reader.ReadBytes(length);
-            var type = reader.ReadByte();
-            if (type == 5)
-            {
-                var objType = reader.ReadByte();
-                reader.ReadBytes(17);
-                SkipObjectValue(reader, objType);
-            }
-            else
-            {
-                SkipConstantValue(reader, type);
-            }
+            SkipNested(reader);
         }
     }
 }
