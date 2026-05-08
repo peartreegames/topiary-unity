@@ -31,7 +31,19 @@ namespace PeartreeGames.Topiary.Unity
             }
         }
 
-        public void Set(string jsonString) => _rootState = JObject.Parse(jsonString);
+        public void Set(string jsonString)
+        {
+            if (string.IsNullOrEmpty(jsonString)) return;
+            try
+            {
+                _rootState = JObject.Parse(jsonString);
+            }
+            catch (JsonException e)
+            {
+                Debug.LogError($"[Topiary] State.Set failed to parse JSON: {e.Message}");
+            }
+        }
+
         public void Clear() => _rootState = new JObject();
     }
 }
