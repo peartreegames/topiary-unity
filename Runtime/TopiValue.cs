@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace PeartreeGames.Topiary.Unity
 {
@@ -11,10 +12,13 @@ namespace PeartreeGames.Topiary.Unity
     /// or check tag if unknown
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    public struct TopiValue : IEquatable<TopiValue>
+    public struct TopiValue : IEquatable<TopiValue>, IDisposable
     {
         public Tag tag;
         private TopiValueData _data;
+
+        // Cached marshaling stride. Marshal.SizeOf<T>() is reflective; cache once.
+        internal static readonly int Stride = Marshal.SizeOf<TopiValue>();
 
         /// <summary>
         /// Converts a pointer to a TopiValue struct.
@@ -96,18 +100,34 @@ namespace PeartreeGames.Topiary.Unity
             ? _data.numberValue
             : throw new InvalidOperationException($"Value {tag} cannot be used as float");
 
+        /// <remarks>
+        /// Allocates a fresh managed string each access by decoding native UTF-8 bytes.
+        /// Capture into a local for hot loops.
+        /// </remarks>
         public string String => tag == Tag.String
             ? _data.stringValue.Value
             : throw new InvalidOperationException($"Value {tag} cannot be used as string");
 
+        /// <remarks>
+        /// Walks native memory and allocates a fresh array on every access. Capture into a
+        /// local for hot loops (<c>var list = val.List;</c>) — repeated reads do not memoize.
+        /// </remarks>
         public TopiValue[] List => tag == Tag.List
             ? _data.listValue.List
             : throw new InvalidOperationException($"Value {tag} cannot be used as list");
 
+        /// <remarks>
+        /// Walks native memory and allocates a fresh HashSet on every access. Capture into a
+        /// local for hot loops — repeated reads do not memoize.
+        /// </remarks>
         public HashSet<TopiValue> Set => tag == Tag.Set
             ? _data.listValue.Set
             : throw new InvalidOperationException($"Value {tag} cannot be used as set");
 
+        /// <remarks>
+        /// Walks native memory and allocates a fresh Dictionary on every access. Capture into a
+        /// local for hot loops — repeated reads do not memoize.
+        /// </remarks>
         public Dictionary<TopiValue, TopiValue> Map => tag == Tag.Map
             ? _data.listValue.Map
             : throw new InvalidOperationException($"Value {tag} cannot be used as set");
@@ -116,7 +136,10 @@ namespace PeartreeGames.Topiary.Unity
             ? _data.enumValue
             : throw new InvalidOperationException($"Value {tag} cannot be used as enum");
 
-        // Will create boxing, better to use the above is value type is known
+        /// <remarks>
+        /// Boxes value types and re-walks native memory on every access. Prefer the typed
+        /// accessors (<see cref="Bool"/>, <see cref="Int"/>, etc.) when the tag is known.
+        /// </remarks>
         public object Value => tag switch
         {
             Tag.Bool => _data.boolValue == 1,
@@ -156,7 +179,7 @@ namespace PeartreeGames.Topiary.Unity
                 Tag.Map => $"Map{{{string.Join(", ", _data.listValue.Map)}}}",
                 Tag.Enum => $"{_data.enumValue.Name}.{_data.enumValue.Value}",
                 _ => $"{tag}: null"
-            } ?? throw new InvalidOperationException();
+            };
 
         /// <summary>
         /// Determines whether the current instance is equal to the specified object.
@@ -171,7 +194,7 @@ namespace PeartreeGames.Topiary.Unity
                 case Tag.Bool:
                     return _data.boolValue == other._data.boolValue;
                 case Tag.Number:
-                    return Math.Abs(_data.numberValue - other._data.numberValue) < 0.0001f;
+                    return _data.numberValue.Equals(other._data.numberValue);
                 case Tag.String:
                     return _data.stringValue.Value == other._data.stringValue.Value;
                 case Tag.List:
@@ -215,6 +238,38 @@ namespace PeartreeGames.Topiary.Unity
         }
 
         /// <summary>
+        /// Frees the unmanaged memory backing this value's string / list / set / map / enum
+        /// payload. Safe no-op for primitives (Bool, Number, Nil).
+        /// </summary>
+        /// <remarks>
+        /// Constructing a List/Set/Map TopiValue transfers ownership of the inner element
+        /// allocations to the outer container — the inner originals must NOT be disposed
+        /// separately. Dispose only the outermost value you constructed.
+        ///
+        /// When a TopiValue is returned from a [Topi] extern, the native side handles the
+        /// free via the registered free callback; do not call Dispose in that path.
+        ///
+        /// Calling Dispose more than once on the same value is a double-free.
+        /// </remarks>
+        public void Dispose()
+        {
+            switch (tag)
+            {
+                case Tag.String:
+                    _data.stringValue.Free();
+                    break;
+                case Tag.Enum:
+                    _data.enumValue.Free();
+                    break;
+                case Tag.List:
+                case Tag.Set:
+                case Tag.Map:
+                    _data.listValue.Free();
+                    break;
+            }
+        }
+
+        /// <summary>
         /// Creates an array of TopiValue objects from the given IntPtr and count.
         /// </summary>
         /// <param name="argPtr">The IntPtr pointing to the start of the memory block containing the TopiValues.</param>
@@ -227,7 +282,7 @@ namespace PeartreeGames.Topiary.Unity
             for (var i = 0; i < count; i++)
             {
                 args[i] = FromPtr(ptr);
-                ptr = IntPtr.Add(ptr, Marshal.SizeOf<TopiValue>());
+                ptr = IntPtr.Add(ptr, TopiValue.Stride);
             }
 
             return args;
@@ -259,29 +314,32 @@ namespace PeartreeGames.Topiary.Unity
         private readonly IntPtr strPtr;
         private readonly UIntPtr strLen;
 
+        internal static readonly int Stride = Marshal.SizeOf<StringBuffer>();
+
 
         public StringBuffer(string value)
         {
-            strPtr = Marshal.StringToHGlobalAnsi(value);
-            strLen = (UIntPtr)value.Length;
+            var bytes = Encoding.UTF8.GetBytes(value ?? string.Empty);
+            strLen = (UIntPtr)bytes.Length;
+            strPtr = Marshal.AllocHGlobal(bytes.Length + 1);
+            Marshal.Copy(bytes, 0, strPtr, bytes.Length);
+            Marshal.WriteByte(strPtr, bytes.Length, 0);
         }
 
         public int Length => (int)strLen;
-        public string Value => Marshal.PtrToStringAnsi(strPtr, (int)strLen);
+        public string Value => Marshal.PtrToStringUTF8(strPtr, (int)strLen);
 
-        public bool Equals(StringBuffer other)
-        {
-            return strPtr.Equals(other.strPtr) && strLen.Equals(other.strLen);
-        }
+        public bool Equals(StringBuffer other) => Value == other.Value;
 
-        public override bool Equals(object obj)
-        {
-            return obj is StringBuffer other && Equals(other);
-        }
+        public override bool Equals(object obj) => obj is StringBuffer other && Equals(other);
 
-        public override int GetHashCode()
+        public override int GetHashCode() => Value?.GetHashCode() ?? 0;
+
+        // Releases the unmanaged byte buffer. Pairs with the AllocHGlobal in the ctor and the
+        // free callback registered with the VM. Caller must not invoke twice.
+        internal void Free()
         {
-            return HashCode.Combine(strPtr, strLen);
+            if (strPtr != IntPtr.Zero) Marshal.FreeHGlobal(strPtr);
         }
     }
 
@@ -310,6 +368,12 @@ namespace PeartreeGames.Topiary.Unity
         {
             return obj is TopiEnum other && Equals(other);
         }
+
+        internal void Free()
+        {
+            name.Free();
+            value.Free();
+        }
     }
 
 
@@ -322,7 +386,7 @@ namespace PeartreeGames.Topiary.Unity
         public TopiList(TopiValue[] list)
         {
             count = (ushort)list.Length;
-            var stride = Marshal.SizeOf<TopiValue>();
+            var stride = TopiValue.Stride;
             listPtr = Marshal.AllocHGlobal(stride * count);
             for (var i = 0; i < count; i++)
             {
@@ -340,7 +404,7 @@ namespace PeartreeGames.Topiary.Unity
                 for (var i = 0; i < count; i++)
                 {
                     value[i] = TopiValue.FromPtr(ptr);
-                    ptr = IntPtr.Add(ptr, Marshal.SizeOf<TopiValue>());
+                    ptr = IntPtr.Add(ptr, TopiValue.Stride);
                 }
 
                 return value;
@@ -350,7 +414,7 @@ namespace PeartreeGames.Topiary.Unity
         public TopiList(HashSet<TopiValue> set)
         {
             count = (ushort)set.Count;
-            var stride = Marshal.SizeOf<TopiValue>();
+            var stride = TopiValue.Stride;
             listPtr = Marshal.AllocHGlobal(stride * count);
             var i = 0;
             foreach (var item in set)
@@ -370,7 +434,7 @@ namespace PeartreeGames.Topiary.Unity
                 for (var i = 0; i < count; i++)
                 {
                     set.Add(TopiValue.FromPtr(ptr));
-                    ptr = IntPtr.Add(ptr, Marshal.SizeOf<TopiValue>());
+                    ptr = IntPtr.Add(ptr, TopiValue.Stride);
                 }
 
                 return set;
@@ -381,7 +445,7 @@ namespace PeartreeGames.Topiary.Unity
         {
             // count is total element count, so a map of N pairs stores 2*N flattened key/value entries
             count = (ushort)(map.Count * 2);
-            var stride = Marshal.SizeOf<TopiValue>();
+            var stride = TopiValue.Stride;
             listPtr = Marshal.AllocHGlobal(stride * count);
             var i = 0;
             foreach (var kvp in map)
@@ -404,14 +468,29 @@ namespace PeartreeGames.Topiary.Unity
                 for (var i = 0; i < pairs; i++)
                 {
                     var key = TopiValue.FromPtr(ptr);
-                    ptr = IntPtr.Add(ptr, Marshal.SizeOf<TopiValue>());
+                    ptr = IntPtr.Add(ptr, TopiValue.Stride);
                     var value = TopiValue.FromPtr(ptr);
-                    ptr = IntPtr.Add(ptr, Marshal.SizeOf<TopiValue>());
+                    ptr = IntPtr.Add(ptr, TopiValue.Stride);
                     map.Add(key, value);
                 }
 
                 return map;
             }
+        }
+
+        // Walks the unmanaged buffer, recursively disposes each element so inner allocations
+        // (strings inside a list, enum buffers, nested lists) are released, then frees the
+        // outer buffer. Mirrors how the native side releases a TopiList via the free callback.
+        internal void Free()
+        {
+            if (listPtr == IntPtr.Zero) return;
+            var ptr = listPtr;
+            for (var i = 0; i < count; i++)
+            {
+                TopiValue.FromPtr(ptr).Dispose();
+                ptr = IntPtr.Add(ptr, TopiValue.Stride);
+            }
+            Marshal.FreeHGlobal(listPtr);
         }
 
         public bool Equals(TopiList other)
