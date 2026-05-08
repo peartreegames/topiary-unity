@@ -50,7 +50,7 @@ namespace PeartreeGames.Topiary.Unity
         );
 
         [DllImport("topi", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void run(IntPtr vmPt);
+        public static extern void run(IntPtr vmPtr);
 
         [DllImport("topi", CallingConvention = CallingConvention.Cdecl)]
         public static extern void selectContinue(IntPtr vmPtr);
@@ -95,6 +95,16 @@ namespace PeartreeGames.Topiary.Unity
         [DllImport("topi", CallingConvention = CallingConvention.Cdecl)]
         public static extern void loadState(IntPtr vmPtr,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string json, UIntPtr jsonLength);
+
+        [DllImport("topi", CallingConvention = CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.U1)]
+        public static extern bool saveStateFile(IntPtr vmPtr,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string path);
+
+        [DllImport("topi", CallingConvention = CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.U1)]
+        public static extern bool loadStateFile(IntPtr vmPtr,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string path);
 
         [DllImport("topi", CallingConvention = CallingConvention.Cdecl)]
         public static extern void setPanicHandler(IntPtr handlerPtr);
